@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ledger — Net Worth</title>
+<style>
+  :root{
+    --bg:#0B0E11;
+    --panel:#12161C;
+    --line:#23272E;
+    --text:#E6E8EB;
+    --muted:#6B7280;
+    --amber:#F2A900;
+    --green:#3ECF8E;
+    --red:#E5484D;
+    --mono: "JetBrains Mono", "SF Mono", "Consolas", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    padding:32px 20px 80px;
+  }
+  .wrap{max-width:760px;margin:0 auto;}
+  header{
+    display:flex;
+    justify-content:space-between;
+    align-items:baseline;
+    border-bottom:1px solid var(--line);
+    padding-bottom:16px;
+    margin-bottom:28px;
+  }
+  header h1{
+    font-size:15px;
+    font-weight:600;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--muted);
+    margin:0;
+  }
+  #clock{
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--muted);
+  }
+  .hero{
+    text-align:left;
+    margin-bottom:36px;
+  }
+  .hero .label{
+    font-size:12px;
+    color:var(--muted);
+    text-transform:uppercase;
+    letter-spacing:0.1em;
+    margin-bottom:6px;
+  }
+  .hero .value{
+    font-family:var(--mono);
+    font-size:52px;
+    font-weight:600;
+    font-variant-numeric:tabular-nums;
+    letter-spacing:-0.01em;
+  }
+  .hero .breakdown{
+    display:flex;
+    gap:24px;
+    margin-top:12px;
+    font-family:var(--mono);
+    font-size:13px;
+    color:var(--muted);
+  }
+  .hero .breakdown span b{color:var(--text);font-weight:500;}
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    margin-bottom:24px;
+  }
+  .panel-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:12px 16px;
+    border-bottom:1px solid var(--line);
+  }
+  .panel-head h2{
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.1em;
+    color:var(--muted);
+    margin:0;
+    font-weight:600;
+  }
+  .panel-head .sub{
+    font-family:var(--mono);
+    font-size:11px;
+    color:var(--muted);
+  }
+  table{width:100%;border-collapse:collapse;}
+  th{
+    text-align:left;
+    font-size:10px;
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    color:var(--muted);
+    font-weight:500;
+    padding:8px 16px;
+    border-bottom:1px solid var(--line);
+  }
+  td{
+    padding:10px 16px;
+    border-bottom:1px solid var(--line);
+    font-size:14px;
+  }
+  tr:last-child td{border-bottom:none;}
+  td.num, th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;}
+  td input, td select{
+    background:transparent;
+    border:none;
+    color:var(--text);
+    font-family:inherit;
+    font-size:14px;
+    width:100%;
+    padding:2px 0;
+  }
+  td input.num-input{
+    font-family:var(--mono);
+    text-align:right;
+  }
+  td input:focus, td select:focus{outline:none;border-bottom:1px solid var(--amber);}
+  .row-total td{
+    font-weight:600;
+    background:rgba(255,255,255,0.02);
+  }
+  .del-btn{
+    background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:0 4px;
+  }
+  .del-btn:hover{color:var(--red);}
+  .add-row{
+    padding:10px 16px;
+    font-size:12px;
+    color:var(--amber);
+    cursor:pointer;
+    border-top:1px solid var(--line);
+    background:none;
+    border-left:none;border-right:none;border-bottom:none;
+    width:100%;
+    text-align:left;
+    font-family:var(--sans);
+  }
+  .add-row:hover{background:rgba(242,169,0,0.06);}
+  .price-tag{
+    font-family:var(--mono);
+    font-size:11px;
+    color:var(--muted);
+  }
+  .price-tag.live{color:var(--green);}
+  .btc-dot{
+    display:inline-block;width:6px;height:6px;border-radius:50%;
+    background:var(--amber);margin-right:6px;
+  }
+  footer{
+    text-align:center;
+    color:var(--muted);
+    font-size:11px;
+    margin-top:40px;
+    font-family:var(--mono);
+  }
+  footer a{color:var(--muted);}
+  ::placeholder{color:#3A3F47;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Ledger</h1>
+    <div id="clock"></div>
+  </header>
+
+  <div id="apiKeyRow" style="display:none;background:var(--panel);border:1px solid var(--line);padding:12px 16px;margin-bottom:24px;">
+    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">Finnhub API key (used for crypto &amp; stocks)</div>
+    <input id="finnhubKey" placeholder="Paste your Finnhub API key" style="background:transparent;border:1px solid var(--line);color:var(--text);font-family:var(--mono);font-size:12px;padding:6px 8px;width:280px;" oninput="saveApiKey(this.value)">
+  </div>
+
+  <div class="hero">
+    <div class="label">Net Worth</div>
+    <div class="value" id="netWorthTotal">£0.00</div>
+    <div class="breakdown">
+      <span>Banking <b id="bankingSub">£0.00</b></span>
+      <span>Investments <b id="investSub">£0.00</b></span>
+    </div>
+  </div>
+
+  <!-- BANKING -->
+  <div class="panel">
+    <div class="panel-head">
+      <h2>Banking &amp; Cash</h2>
+      <div class="sub" id="bankingTotal">£0.00</div>
+    </div>
+    <table>
+      <thead>
+        <tr><th>Account</th><th>Institution</th><th class="num">Balance (£)</th><th></th></tr>
+      </thead>
+      <tbody id="bankingBody"></tbody>
+    </table>
+    <button class="add-row" onclick="addBankRow()">+ add account</button>
+  </div>
+
+  <!-- CRYPTO -->
+  <div class="panel">
+    <div class="panel-head">
+      <h2>Crypto <span class="price-tag live" id="cryptoStatus">● live via Finnhub</span></h2>
+      <div class="sub" id="cryptoTotal">£0.00</div>
+    </div>
+    <table>
+      <thead>
+        <tr><th>Asset</th><th class="num">Quantity</th><th class="num">Price (£)</th><th class="num">Value (£)</th><th></th></tr>
+      </thead>
+      <tbody id="cryptoBody"></tbody>
+    </table>
+    <button class="add-row" onclick="addCryptoRow()">+ add coin</button>
+  </div>
+
+  <!-- STOCKS -->
+  <div class="panel">
+    <div class="panel-head">
+      <h2>Stocks &amp; Funds <span class="price-tag live" id="stockStatus">● live via Finnhub</span></h2>
+      <div class="sub" id="stocksTotal">£0.00</div>
+    </div>
+    <table>
+      <thead>
+        <tr><th>Ticker (US-listed)</th><th class="num">Quantity</th><th class="num">Price (£)</th><th class="num">Value (£)</th><th></th></tr>
+      </thead>
+      <tbody id="stocksBody"></tbody>
+    </table>
+    <button class="add-row" onclick="addStockRow()">+ add holding</button>
+  </div>
+
+  <!-- OTHER -->
+  <div class="panel">
+    <div class="panel-head">
+      <h2>Other Investments</h2>
+      <div class="sub" id="otherTotal">£0.00</div>
+    </div>
+    <table>
+      <thead>
+        <tr><th>Description</th><th class="num">Value (£)</th><th></th></tr>
+      </thead>
+      <tbody id="otherBody"></tbody>
+    </table>
+    <button class="add-row" onclick="addOtherRow()">+ add item</button>
+  </div>
+
+  <footer>
+    all data stored locally in this browser · prices via Finnhub API
+  </footer>
+</div>
+
+<script>
+function cryptoFinnhubSymbol(sym){ return `BINANCE:${(sym||"").toUpperCase()}USDT`; }
+
+let state = JSON.parse(localStorage.getItem("ledgerState") || "null") || {
+  banking: [{account:"Current account", inst:"", balance:0}],
+  crypto: [{symbol:"BTC", qty:0}],
+  stocks: [{ticker:"", qty:0}],
+  other: [{desc:"", value:0}]
+};
+
+let livePrices = {};
+let liveStockPrices = {};
+let stockFetchFailed = {};
+let usdToGbp = null;
+let finnhubKey = localStorage.getItem("finnhubKey") || "";
+
+function save(){ localStorage.setItem("ledgerState", JSON.stringify(state)); }
+function fmt(n){ return "£" + (Number(n)||0).toLocaleString("en-GB",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function sanitizeNum(v){
+  let s = (v||"").replace(/[^0-9.]/g, "");
+  const parts = s.split(".");
+  if(parts.length > 2) s = parts[0] + "." + parts.slice(1).join("");
+  return s;
+}
+
+function withFocusPreserved(fn){
+  const active = document.activeElement;
+  const id = active && active.id;
+  const selStart = active && typeof active.selectionStart === "number" ? active.selectionStart : null;
+  const selEnd = active && typeof active.selectionEnd === "number" ? active.selectionEnd : null;
+  fn();
+  if(id){
+    const el = document.getElementById(id);
+    if(el){
+      el.focus();
+      if(selStart !== null && el.setSelectionRange){
+        try{ el.setSelectionRange(selStart, selEnd); }catch(e){}
+      }
+    }
+  }
+}
+
+function renderBanking(){
+  const body = document.getElementById("bankingBody");
+  body.innerHTML = "";
+  let total = 0;
+  state.banking.forEach((row, i) => {
+    total += Number(row.balance)||0;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><input id="bank-account-${i}" value="${row.account||""}" placeholder="Account name" oninput="updateBank(${i},'account',this.value)"></td>
+      <td><input id="bank-inst-${i}" value="${row.inst||""}" placeholder="Institution" oninput="updateBank(${i},'inst',this.value)"></td>
+      <td class="num"><input id="bank-balance-${i}" class="num-input" type="text" inputmode="decimal" value="${row.balance}" oninput="updateBank(${i},'balance',sanitizeNum(this.value))"></td>
+      <td><button class="del-btn" onclick="delRow('banking',${i})">✕</button></td>`;
+    body.appendChild(tr);
+  });
+  document.getElementById("bankingTotal").textContent = fmt(total);
+  document.getElementById("bankingSub").textContent = fmt(total);
+  return total;
+}
+
+function renderCrypto(){
+  const body = document.getElementById("cryptoBody");
+  body.innerHTML = "";
+  document.getElementById("apiKeyRow").style.display = finnhubKey ? "none" : "block";
+  let total = 0;
+  state.crypto.forEach((row, i) => {
+    const symbol = (row.symbol||"").toUpperCase();
+    const priceUsd = livePrices[symbol];
+    const priceGbp = (priceUsd && usdToGbp) ? priceUsd * usdToGbp : 0;
+    const value = (Number(row.qty)||0) * priceGbp;
+    total += value;
+    let priceCell;
+    if(!finnhubKey) priceCell = '<span class="price-tag">add API key</span>';
+    else if(!symbol) priceCell = '<span class="price-tag">—</span>';
+    else if(priceGbp) priceCell = fmt(priceGbp);
+    else priceCell = '<span class="price-tag">loading…</span>';
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><input id="crypto-symbol-${i}" value="${row.symbol||""}" placeholder="e.g. BTC" style="text-transform:uppercase" oninput="updateCrypto(${i},'symbol',this.value.toUpperCase())"></td>
+      <td class="num"><input id="crypto-qty-${i}" class="num-input" type="text" inputmode="decimal" value="${row.qty}" oninput="updateCrypto(${i},'qty',sanitizeNum(this.value))"></td>
+      <td class="num">${priceCell}</td>
+      <td class="num">${fmt(value)}</td>
+      <td><button class="del-btn" onclick="delRow('crypto',${i})">✕</button></td>`;
+    body.appendChild(tr);
+  });
+  document.getElementById("cryptoTotal").textContent = fmt(total);
+  return total;
+}
+
+function renderStocks(){
+  const body = document.getElementById("stocksBody");
+  body.innerHTML = "";
+  document.getElementById("apiKeyRow").style.display = finnhubKey ? "none" : "block";
+  let total = 0;
+  state.stocks.forEach((row, i) => {
+    const ticker = (row.ticker||"").toUpperCase();
+    const liveUsd = liveStockPrices[ticker];
+    const livePriceGbp = (liveUsd && usdToGbp) ? liveUsd * usdToGbp : null;
+    const hasOverride = row.priceOverride !== undefined && row.priceOverride !== null && row.priceOverride !== "";
+    const priceGbp = hasOverride ? (Number(row.priceOverride)||0) : (livePriceGbp || 0);
+    const value = (Number(row.qty)||0) * priceGbp;
+    total += value;
+    let priceInputHtml;
+    if(!finnhubKey || !ticker){
+      priceInputHtml = `<input id="stock-price-${i}" class="num-input" type="text" inputmode="decimal" value="" placeholder="—" disabled>`;
+    } else {
+      const displayVal = hasOverride ? row.priceOverride : (livePriceGbp ? livePriceGbp.toFixed(2) : "");
+      const placeholder = stockFetchFailed[ticker] ? "not on Finnhub — enter manually" : "loading…";
+      priceInputHtml = `<input id="stock-price-${i}" class="num-input" type="text" inputmode="decimal" value="${displayVal}" placeholder="${placeholder}" oninput="updateStockPrice(${i},sanitizeNum(this.value))">`;
+    }
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><input id="stock-ticker-${i}" value="${row.ticker||""}" placeholder="e.g. AAPL" style="text-transform:uppercase" oninput="updateStock(${i},'ticker',this.value.toUpperCase())"></td>
+      <td class="num"><input id="stock-qty-${i}" class="num-input" type="text" inputmode="decimal" value="${row.qty}" oninput="updateStock(${i},'qty',sanitizeNum(this.value))"></td>
+      <td class="num">${priceInputHtml}</td>
+      <td class="num">${fmt(value)}</td>
+      <td><button class="del-btn" onclick="delRow('stocks',${i})">✕</button></td>`;
+    body.appendChild(tr);
+  });
+  document.getElementById("stocksTotal").textContent = fmt(total);
+  return total;
+}
+
+function updateStockPrice(i, v){
+  state.stocks[i].priceOverride = v === "" ? null : v;
+  withFocusPreserved(renderAll);
+}
+
+function saveApiKey(v){
+  finnhubKey = v.trim();
+  localStorage.setItem("finnhubKey", finnhubKey);
+  fetchAllPrices();
+}
+
+function renderOther(){
+  const body = document.getElementById("otherBody");
+  body.innerHTML = "";
+  let total = 0;
+  state.other.forEach((row, i) => {
+    total += Number(row.value)||0;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><input id="other-desc-${i}" value="${row.desc||""}" placeholder="e.g. Pension" oninput="updateOther(${i},'desc',this.value)"></td>
+      <td class="num"><input id="other-value-${i}" class="num-input" type="text" inputmode="decimal" value="${row.value}" oninput="updateOther(${i},'value',sanitizeNum(this.value))"></td>
+      <td><button class="del-btn" onclick="delRow('other',${i})">✕</button></td>`;
+    body.appendChild(tr);
+  });
+  document.getElementById("otherTotal").textContent = fmt(total);
+  return total;
+}
+
+function renderAll(){
+  const bank = renderBanking();
+  const crypto = renderCrypto();
+  const stocks = renderStocks();
+  const other = renderOther();
+  const invest = crypto + stocks + other;
+  document.getElementById("investSub").textContent = fmt(invest);
+  document.getElementById("netWorthTotal").textContent = fmt(bank + invest);
+  save();
+}
+
+function updateBank(i,k,v){ state.banking[i][k]=v; withFocusPreserved(renderAll); }
+function updateCrypto(i,k,v){ state.crypto[i][k]=v; withFocusPreserved(renderAll); }
+function updateStock(i,k,v){ state.stocks[i][k]=v; withFocusPreserved(renderAll); }
+function updateOther(i,k,v){ state.other[i][k]=v; withFocusPreserved(renderAll); }
+function delRow(table,i){ state[table].splice(i,1); renderAll(); }
+function addBankRow(){ state.banking.push({account:"",inst:"",balance:0}); renderAll(); }
+function addCryptoRow(){ state.crypto.push({symbol:"",qty:0}); renderAll(); }
+function addStockRow(){ state.stocks.push({ticker:"",qty:0}); renderAll(); }
+function addOtherRow(){ state.other.push({desc:"",value:0}); renderAll(); }
+
+async function fetchFxRate(){
+  try{
+    const res = await fetch("https://api.frankfurter.dev/v1/latest?base=USD&symbols=GBP");
+    const data = await res.json();
+    if(res.ok && data && data.rates && typeof data.rates.GBP === "number"){
+      usdToGbp = data.rates.GBP;
+    } else if(!usdToGbp){
+      usdToGbp = 0.79; // rough fallback if FX source is unavailable
+    }
+  }catch(e){
+    if(!usdToGbp) usdToGbp = 0.79;
+  }
+}
+
+async function fetchCryptoPrices(){
+  if(!finnhubKey){ renderAll(); return; }
+  const symbols = [...new Set(state.crypto.map(r=>(r.symbol||"").toUpperCase()).filter(Boolean))];
+  let failed = false;
+  for(const sym of symbols){
+    try{
+      const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${cryptoFinnhubSymbol(sym)}&token=${finnhubKey}`);
+      const data = await res.json();
+      if(data && data.c) livePrices[sym] = data.c;
+    }catch(e){ failed = true; }
+  }
+  const statusEl = document.getElementById("cryptoStatus");
+  if(failed){ statusEl.textContent = "● price fetch failed"; statusEl.className = "price-tag"; }
+  else { statusEl.textContent = "● live via Finnhub"; statusEl.className = "price-tag live"; }
+  renderAll();
+}
+
+async function fetchStockPrices(){
+  if(!finnhubKey) { renderAll(); return; }
+  const tickers = [...new Set(state.stocks.map(r=>(r.ticker||"").toUpperCase()).filter(Boolean))];
+  if(!tickers.length){ renderAll(); return; }
+  let anyFailed = false;
+  for(const t of tickers){
+    try{
+      const res = await fetch(`https://finnhub.io/api/v1/quote?symbol=${t}&token=${finnhubKey}`);
+      if(!res.ok){ stockFetchFailed[t] = true; anyFailed = true; continue; }
+      const data = await res.json();
+      if(data && typeof data.c === "number" && data.c > 0){
+        liveStockPrices[t] = data.c;
+        delete stockFetchFailed[t];
+      } else {
+        stockFetchFailed[t] = true; anyFailed = true;
+      }
+    }catch(e){ stockFetchFailed[t] = true; anyFailed = true; }
+  }
+  const statusEl = document.getElementById("stockStatus");
+  if(anyFailed){ statusEl.textContent = "● some prices need manual entry"; statusEl.className = "price-tag"; }
+  else { statusEl.textContent = "● live via Finnhub"; statusEl.className = "price-tag live"; }
+  renderAll();
+}
+
+async function fetchAllPrices(){
+  if(!finnhubKey){ renderAll(); return; }
+  await fetchFxRate();
+  await fetchCryptoPrices();
+  await fetchStockPrices();
+}
+
+function tickClock(){
+  document.getElementById("clock").textContent = new Date().toLocaleString("en-GB");
+}
+
+document.getElementById("finnhubKey").value = finnhubKey;
+renderAll();
+fetchAllPrices();
+setInterval(fetchAllPrices, 60000);
+setInterval(tickClock, 1000);
+tickClock();
+</script>
+</body>
+</html>
