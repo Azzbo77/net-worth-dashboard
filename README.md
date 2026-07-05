@@ -1,8 +1,10 @@
-# Net Worth dashboard
+# Net Worth Dashboard
 
 A beautiful, single-file, self-hosted net worth dashboard with live prices. Built for privacy, simplicity, and daily use.
 
-![Net Worth Dashboard](screenshot-1.PNG)
+![Net Worth Dashboard Overview](screenshot-1.PNG)
+
+![Allocation and History Charts](screenshot-2.PNG)
 
 ## Features
 
@@ -15,12 +17,6 @@ A beautiful, single-file, self-hosted net worth dashboard with live prices. Buil
 - **Secure backup**: Encrypted export/import (AES-GCM) with optional PIN lock
 - **Zero build step**: One HTML file with inline CSS + vanilla JS
 
-## Screenshots
-
-[Net Worth Dashboard Overview](screenshot-1.PNG)
-
-[Allocation and History Charts](screenshot-2.PNG)
-
 ## Quick Start
 
 1. Download [`index.html`](index.html)
@@ -28,7 +24,7 @@ A beautiful, single-file, self-hosted net worth dashboard with live prices. Buil
 3. (Optional but recommended) Get a free [Finnhub API key](https://finnhub.io/register) and paste it in **Settings**
 4. Start adding your accounts and holdings
 
-**Pro tip**: Host it properly (see below) for best experience across devices.
+**Pro tip**: Host it properly (see below) for the best experience across devices.
 
 ## Hosting
 
@@ -38,14 +34,14 @@ A beautiful, single-file, self-hosted net worth dashboard with live prices. Buil
 
 ### Self-hosted (homelab style)
 ```bash
-## Caddy (one-liner)
+# Caddy (one-liner)
 caddy file-server --root /path/to/net-worth-ledger --listen :8080
 ```
-Since it's a single static file, it works great behind authentication (Authelia, OAuth2 Proxy, etc.) if you want extra protection.
+Or use nginx / your existing reverse proxy. Works great behind authentication (Authelia, OAuth2 Proxy, etc.).
 
 ## Data & Privacy
 
-All data lives only in your browser.
+- All data lives only in your browser.
 - Your Finnhub key is stored in localStorage (never leaves your device except for price API calls).
 - Encrypted backups include the API key so you can restore everything easily.
 - No sync by design — keeps the project zero-dependency. Export/import is the intended way to move data.
@@ -59,9 +55,11 @@ See docs/privacy.md for more details.
 - Debt interest is a simple estimate
 
 ## Contributing
+
 Contributions welcome! This is intentionally kept as a single file for simplicity, but improvements to UX, charts, or new asset types are appreciated.
 
 ## License
+
 MIT License — feel free to fork and modify.
 
 Made for personal use with zero waste and maximum sovereignty.
