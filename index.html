@@ -14,6 +14,8 @@
     --amber:#F2A900;
     --green:#3ECF8E;
     --red:#E5484D;
+    --blue:#4A9EFF;
+    --purple:#9B7EDE;
     --mono: "JetBrains Mono", "SF Mono", "Consolas", monospace;
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   }
@@ -95,6 +97,22 @@
     margin:0;
     font-weight:600;
   }
+  .chevron{
+    display:inline-block;
+    font-size:10px;
+    color:var(--muted);
+    transition:transform 0.15s ease;
+    margin-left:2px;
+  }
+  .panel-body{
+    overflow:hidden;
+  }
+  .panel-body.collapsed{
+    display:none;
+  }
+  .chevron.collapsed{
+    transform:rotate(-90deg);
+  }
   .panel-head .sub{
     font-family:var(--mono);
     font-size:11px;
@@ -172,18 +190,88 @@
   }
   footer a{color:var(--muted);}
   ::placeholder{color:#3A3F47;}
+
+  .banner{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    background:#241C0B;
+    border:1px solid #4A3A15;
+    color:#E8C468;
+    padding:10px 16px;
+    font-size:12px;
+    margin-bottom:20px;
+  }
+  .banner button{
+    background:var(--amber);color:#000;border:none;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;
+  }
+  .legend{padding:14px 16px;display:flex;flex-direction:column;gap:8px;}
+  .legend-row{display:flex;align-items:center;gap:8px;font-size:13px;}
+  .legend-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0;}
+  .legend-row .name{flex:1;color:var(--text);}
+  .legend-row .pct{font-family:var(--mono);color:var(--muted);width:48px;text-align:right;}
+  .legend-row .amt{font-family:var(--mono);color:var(--muted);width:90px;text-align:right;}
+  .chart-wrap{padding:16px;}
+  #lockOverlay{
+    position:fixed;inset:0;background:var(--bg);z-index:9999;
+    display:none;align-items:center;justify-content:center;flex-direction:column;
+  }
+  #lockOverlay input{
+    background:transparent;border:1px solid var(--line);color:var(--text);
+    font-family:var(--mono);font-size:16px;padding:10px 14px;text-align:center;
+    letter-spacing:0.2em;width:200px;margin-top:16px;
+  }
+  #lockOverlay button{
+    margin-top:12px;background:var(--amber);color:#000;border:none;
+    padding:8px 20px;font-size:12px;font-weight:600;cursor:pointer;
+  }
+  .settings-row{padding:14px 16px;border-top:1px solid var(--line);}
+  .settings-row:first-child{border-top:none;}
+  .small-btn{
+    background:transparent;color:var(--text);border:1px solid var(--line);
+    padding:6px 12px;font-size:11px;cursor:pointer;
+  }
 </style>
 </head>
 <body>
+<div id="lockOverlay">
+  <div style="font-family:var(--mono);color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:0.1em;">Locked</div>
+  <input id="lockPinInput" type="password" placeholder="PIN" onkeydown="if(event.key==='Enter')attemptUnlock()">
+  <button onclick="attemptUnlock()">Unlock</button>
+  <div id="lockError" style="color:var(--red);font-size:12px;margin-top:10px;height:14px;"></div>
+</div>
 <div class="wrap">
   <header>
     <h1>Ledger</h1>
     <div id="clock"></div>
   </header>
 
-  <div id="apiKeyRow" style="display:none;background:var(--panel);border:1px solid var(--line);padding:12px 16px;margin-bottom:24px;">
-    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">Finnhub API key (used for crypto &amp; stocks)</div>
-    <input id="finnhubKey" placeholder="Paste your Finnhub API key" style="background:transparent;border:1px solid var(--line);color:var(--text);font-family:var(--mono);font-size:12px;padding:6px 8px;width:280px;" oninput="saveApiKey(this.value)">
+  <div class="banner" id="backupBanner" style="display:none;">
+    <span id="backupBannerText"></span>
+    <button onclick="exportBackup()">Backup now</button>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="panel">
+    <div class="panel-head" onclick="togglePanel('settings')" style="cursor:pointer;">
+      <h2>Settings <span class="chevron" id="chev-settings">▾</span></h2>
+    </div>
+    <div class="panel-body" id="body-settings">
+      <div class="settings-row">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">Finnhub API key (used for crypto &amp; stocks)</div>
+        <div style="display:flex;gap:8px;">
+          <input id="finnhubKey" type="password" placeholder="Paste your Finnhub API key" style="background:transparent;border:1px solid var(--line);color:var(--text);font-family:var(--mono);font-size:12px;padding:6px 8px;flex:1;max-width:320px;" oninput="saveApiKey(this.value)">
+          <button onclick="toggleKeyVisibility()" id="toggleKeyBtn" class="small-btn">Show</button>
+        </div>
+        <div id="keyStatus" style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:8px;"></div>
+      </div>
+      <div class="settings-row">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">PIN lock (deters casual glances — not real security)</div>
+        <button onclick="setPinLock()" id="pinBtn" class="small-btn">Set a PIN</button>
+        <div id="pinStatus" style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:8px;"></div>
+      </div>
+    </div>
   </div>
 
   <div class="hero">
@@ -192,67 +280,132 @@
     <div class="breakdown">
       <span>Banking <b id="bankingSub">£0.00</b></span>
       <span>Investments <b id="investSub">£0.00</b></span>
+      <span>Debt <b id="debtSub" style="color:var(--red);">£0.00</b></span>
     </div>
   </div>
 
   <!-- BANKING -->
   <div class="panel">
-    <div class="panel-head">
-      <h2>Banking &amp; Cash</h2>
+    <div class="panel-head" onclick="togglePanel('banking')" style="cursor:pointer;">
+      <h2>Banking &amp; Cash <span class="chevron" id="chev-banking">▾</span></h2>
       <div class="sub" id="bankingTotal">£0.00</div>
     </div>
-    <table>
-      <thead>
-        <tr><th>Account</th><th>Institution</th><th class="num">Balance (£)</th><th></th></tr>
-      </thead>
-      <tbody id="bankingBody"></tbody>
-    </table>
-    <button class="add-row" onclick="addBankRow()">+ add account</button>
+    <div class="panel-body" id="body-banking">
+      <table>
+        <thead>
+          <tr><th>Account</th><th>Institution</th><th class="num">Balance</th><th style="text-align:center;">USD</th><th></th></tr>
+        </thead>
+        <tbody id="bankingBody"></tbody>
+      </table>
+      <button class="add-row" onclick="addBankRow()">+ add account</button>
+    </div>
   </div>
 
   <!-- CRYPTO -->
   <div class="panel">
-    <div class="panel-head">
-      <h2>Crypto <span class="price-tag live" id="cryptoStatus">● live via Finnhub</span></h2>
+    <div class="panel-head" onclick="togglePanel('crypto')" style="cursor:pointer;">
+      <h2>Crypto <span class="chevron" id="chev-crypto">▾</span> <span class="price-tag live" id="cryptoStatus">● live via Finnhub</span></h2>
       <div class="sub" id="cryptoTotal">£0.00</div>
     </div>
-    <table>
-      <thead>
-        <tr><th>Asset</th><th class="num">Quantity</th><th class="num">Price (£)</th><th class="num">Value (£)</th><th></th></tr>
-      </thead>
-      <tbody id="cryptoBody"></tbody>
-    </table>
-    <button class="add-row" onclick="addCryptoRow()">+ add coin</button>
+    <div class="panel-body" id="body-crypto">
+      <table>
+        <thead>
+          <tr><th>Asset</th><th class="num">Quantity</th><th class="num">Price (£)</th><th class="num">Value (£)</th><th></th></tr>
+        </thead>
+        <tbody id="cryptoBody"></tbody>
+      </table>
+      <button class="add-row" onclick="addCryptoRow()">+ add coin</button>
+    </div>
   </div>
 
   <!-- STOCKS -->
   <div class="panel">
-    <div class="panel-head">
-      <h2>Stocks &amp; Funds <span class="price-tag live" id="stockStatus">● live via Finnhub</span></h2>
+    <div class="panel-head" onclick="togglePanel('stocks')" style="cursor:pointer;">
+      <h2>Stocks &amp; Funds <span class="chevron" id="chev-stocks">▾</span> <span class="price-tag live" id="stockStatus">● live via Finnhub</span></h2>
       <div class="sub" id="stocksTotal">£0.00</div>
     </div>
-    <table>
-      <thead>
-        <tr><th>Ticker (US-listed)</th><th class="num">Quantity</th><th class="num">Price (£)</th><th class="num">Value (£)</th><th></th></tr>
-      </thead>
-      <tbody id="stocksBody"></tbody>
-    </table>
-    <button class="add-row" onclick="addStockRow()">+ add holding</button>
+    <div class="panel-body" id="body-stocks">
+      <table>
+        <thead>
+          <tr><th>Ticker (US-listed)</th><th class="num">Quantity</th><th class="num">Price (£)</th><th class="num">Value (£)</th><th></th></tr>
+        </thead>
+        <tbody id="stocksBody"></tbody>
+      </table>
+      <button class="add-row" onclick="addStockRow()">+ add holding</button>
+    </div>
   </div>
 
   <!-- OTHER -->
   <div class="panel">
-    <div class="panel-head">
-      <h2>Other Investments</h2>
+    <div class="panel-head" onclick="togglePanel('other')" style="cursor:pointer;">
+      <h2>Other Investments <span class="chevron" id="chev-other">▾</span></h2>
       <div class="sub" id="otherTotal">£0.00</div>
     </div>
-    <table>
-      <thead>
-        <tr><th>Description</th><th class="num">Value (£)</th><th></th></tr>
-      </thead>
-      <tbody id="otherBody"></tbody>
-    </table>
-    <button class="add-row" onclick="addOtherRow()">+ add item</button>
+    <div class="panel-body" id="body-other">
+      <table>
+        <thead>
+          <tr><th>Description</th><th class="num">Value</th><th style="text-align:center;">USD</th><th></th></tr>
+        </thead>
+        <tbody id="otherBody"></tbody>
+      </table>
+      <button class="add-row" onclick="addOtherRow()">+ add item</button>
+    </div>
+  </div>
+
+  <!-- DEBT -->
+  <div class="panel" style="border-color:#3A1F22;">
+    <div class="panel-head" onclick="togglePanel('debt')" style="border-bottom-color:#3A1F22;cursor:pointer;">
+      <h2 style="color:var(--red);">Debt &amp; Liabilities <span class="chevron" id="chev-debt">▾</span></h2>
+      <div class="sub" id="debtTotal" style="color:var(--red);">£0.00</div>
+    </div>
+    <div class="panel-body" id="body-debt">
+      <table>
+        <thead>
+          <tr><th>Description</th><th class="num">Balance owed (£)</th><th class="num">APR %</th><th class="num">Est. yearly interest</th><th></th></tr>
+        </thead>
+        <tbody id="debtBody"></tbody>
+      </table>
+      <button class="add-row" onclick="addDebtRow()" style="color:var(--red);">+ add debt</button>
+    </div>
+  </div>
+
+  <!-- ALLOCATION -->
+  <div class="panel">
+    <div class="panel-head" onclick="togglePanel('allocation')" style="cursor:pointer;">
+      <h2>Allocation <span class="chevron" id="chev-allocation">▾</span></h2>
+    </div>
+    <div class="panel-body" id="body-allocation">
+      <div class="chart-wrap" id="allocationChart" style="display:flex;gap:24px;align-items:center;flex-wrap:wrap;justify-content:center;"></div>
+      <div class="legend" id="allocationLegend"></div>
+    </div>
+  </div>
+
+  <!-- HISTORY -->
+  <div class="panel">
+    <div class="panel-head" onclick="togglePanel('history')" style="cursor:pointer;">
+      <h2>Net Worth History <span class="chevron" id="chev-history">▾</span></h2>
+    </div>
+    <div class="panel-body" id="body-history">
+      <div class="chart-wrap" id="historyChart"></div>
+    </div>
+  </div>
+
+  <!-- BACKUP -->
+  <div class="panel">
+    <div class="panel-head" onclick="togglePanel('backup')" style="cursor:pointer;">
+      <h2>Backup <span class="chevron" id="chev-backup">▾</span></h2>
+    </div>
+    <div class="panel-body" id="body-backup">
+      <div style="padding:14px 16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        <button onclick="exportBackup()" style="background:var(--amber);color:#000;border:none;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;">Export encrypted backup</button>
+        <button onclick="document.getElementById('importFile').click()" style="background:transparent;color:var(--text);border:1px solid var(--line);padding:8px 14px;font-size:12px;cursor:pointer;">Import backup</button>
+        <button onclick="exportCsv()" class="small-btn">Export CSV (unencrypted)</button>
+        <input type="file" id="importFile" accept=".ledger,.json" style="display:none;" onchange="importBackup(event)">
+      </div>
+      <div style="padding:0 16px 14px;">
+        <span id="backupStatus" style="font-size:11px;color:var(--muted);font-family:var(--mono);"></span>
+      </div>
+    </div>
   </div>
 
   <footer>
@@ -264,17 +417,40 @@
 function cryptoFinnhubSymbol(sym){ return `BINANCE:${(sym||"").toUpperCase()}USDT`; }
 
 let state = JSON.parse(localStorage.getItem("ledgerState") || "null") || {
-  banking: [{account:"Current account", inst:"", balance:0}],
+  banking: [{account:"Current account", inst:"", balance:0, currency:"GBP"}],
   crypto: [{symbol:"BTC", qty:0}],
   stocks: [{ticker:"", qty:0}],
-  other: [{desc:"", value:0}]
+  other: [{desc:"", value:0, currency:"GBP"}],
+  debt: [{desc:"", value:0, apr:0}]
 };
+
+if(!Array.isArray(state.debt)) state.debt = [{desc:"", value:0}];
+state.banking.forEach(r => { if(r.currency === undefined) r.currency = "GBP"; });
+state.other.forEach(r => { if(r.currency === undefined) r.currency = "GBP"; });
+state.debt.forEach(r => { if(r.apr === undefined) r.apr = 0; });
 
 let livePrices = {};
 let liveStockPrices = {};
 let stockFetchFailed = {};
 let usdToGbp = null;
 let finnhubKey = localStorage.getItem("finnhubKey") || "";
+let collapsedPanels = JSON.parse(localStorage.getItem("ledgerCollapsed") || "{}");
+
+function togglePanel(name){
+  collapsedPanels[name] = !collapsedPanels[name];
+  localStorage.setItem("ledgerCollapsed", JSON.stringify(collapsedPanels));
+  applyPanelState(name);
+}
+function applyPanelState(name){
+  const body = document.getElementById("body-"+name);
+  const chev = document.getElementById("chev-"+name);
+  const isCollapsed = !!collapsedPanels[name];
+  if(body) body.classList.toggle("collapsed", isCollapsed);
+  if(chev) chev.classList.toggle("collapsed", isCollapsed);
+}
+function applyAllPanelStates(){
+  ["banking","crypto","stocks","other","debt","allocation","history","backup","settings"].forEach(applyPanelState);
+}
 
 function save(){ localStorage.setItem("ledgerState", JSON.stringify(state)); }
 function fmt(n){ return "£" + (Number(n)||0).toLocaleString("en-GB",{minimumFractionDigits:2,maximumFractionDigits:2}); }
@@ -282,6 +458,7 @@ function sanitizeNum(v){
   let s = (v||"").replace(/[^0-9.]/g, "");
   const parts = s.split(".");
   if(parts.length > 2) s = parts[0] + "." + parts.slice(1).join("");
+  s = s.replace(/^0+(?=\d)/, "");
   return s;
 }
 
@@ -307,12 +484,20 @@ function renderBanking(){
   body.innerHTML = "";
   let total = 0;
   state.banking.forEach((row, i) => {
-    total += Number(row.balance)||0;
+    const isUsd = row.currency === "USD";
+    const raw = Number(row.balance)||0;
+    const gbpValue = isUsd ? raw * (usdToGbp||0) : raw;
+    total += gbpValue;
+    const convertNote = isUsd ? `<div class="price-tag" style="text-align:right;margin-top:2px;">≈ ${fmt(gbpValue)}</div>` : "";
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td><input id="bank-account-${i}" value="${row.account||""}" placeholder="Account name" oninput="updateBank(${i},'account',this.value)"></td>
       <td><input id="bank-inst-${i}" value="${row.inst||""}" placeholder="Institution" oninput="updateBank(${i},'inst',this.value)"></td>
-      <td class="num"><input id="bank-balance-${i}" class="num-input" type="text" inputmode="decimal" value="${row.balance}" oninput="updateBank(${i},'balance',sanitizeNum(this.value))"></td>
+      <td class="num">
+        <input id="bank-balance-${i}" class="num-input" type="text" inputmode="decimal" value="${row.balance}" onfocus="this.select()" oninput="updateBank(${i},'balance',sanitizeNum(this.value))">
+        ${convertNote}
+      </td>
+      <td style="text-align:center;"><input type="checkbox" ${isUsd?"checked":""} onchange="updateBank(${i},'currency',this.checked?'USD':'GBP')"></td>
       <td><button class="del-btn" onclick="delRow('banking',${i})">✕</button></td>`;
     body.appendChild(tr);
   });
@@ -324,7 +509,6 @@ function renderBanking(){
 function renderCrypto(){
   const body = document.getElementById("cryptoBody");
   body.innerHTML = "";
-  document.getElementById("apiKeyRow").style.display = finnhubKey ? "none" : "block";
   let total = 0;
   state.crypto.forEach((row, i) => {
     const symbol = (row.symbol||"").toUpperCase();
@@ -340,7 +524,7 @@ function renderCrypto(){
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td><input id="crypto-symbol-${i}" value="${row.symbol||""}" placeholder="e.g. BTC" style="text-transform:uppercase" oninput="updateCrypto(${i},'symbol',this.value.toUpperCase())"></td>
-      <td class="num"><input id="crypto-qty-${i}" class="num-input" type="text" inputmode="decimal" value="${row.qty}" oninput="updateCrypto(${i},'qty',sanitizeNum(this.value))"></td>
+      <td class="num"><input id="crypto-qty-${i}" class="num-input" type="text" inputmode="decimal" value="${row.qty}" onfocus="this.select()" oninput="updateCrypto(${i},'qty',sanitizeNum(this.value))"></td>
       <td class="num">${priceCell}</td>
       <td class="num">${fmt(value)}</td>
       <td><button class="del-btn" onclick="delRow('crypto',${i})">✕</button></td>`;
@@ -353,7 +537,6 @@ function renderCrypto(){
 function renderStocks(){
   const body = document.getElementById("stocksBody");
   body.innerHTML = "";
-  document.getElementById("apiKeyRow").style.display = finnhubKey ? "none" : "block";
   let total = 0;
   state.stocks.forEach((row, i) => {
     const ticker = (row.ticker||"").toUpperCase();
@@ -369,12 +552,12 @@ function renderStocks(){
     } else {
       const displayVal = hasOverride ? row.priceOverride : (livePriceGbp ? livePriceGbp.toFixed(2) : "");
       const placeholder = stockFetchFailed[ticker] ? "not on Finnhub — enter manually" : "loading…";
-      priceInputHtml = `<input id="stock-price-${i}" class="num-input" type="text" inputmode="decimal" value="${displayVal}" placeholder="${placeholder}" oninput="updateStockPrice(${i},sanitizeNum(this.value))">`;
+      priceInputHtml = `<input id="stock-price-${i}" class="num-input" type="text" inputmode="decimal" value="${displayVal}" placeholder="${placeholder}" onfocus="this.select()" oninput="updateStockPrice(${i},sanitizeNum(this.value))">`;
     }
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td><input id="stock-ticker-${i}" value="${row.ticker||""}" placeholder="e.g. AAPL" style="text-transform:uppercase" oninput="updateStock(${i},'ticker',this.value.toUpperCase())"></td>
-      <td class="num"><input id="stock-qty-${i}" class="num-input" type="text" inputmode="decimal" value="${row.qty}" oninput="updateStock(${i},'qty',sanitizeNum(this.value))"></td>
+      <td class="num"><input id="stock-qty-${i}" class="num-input" type="text" inputmode="decimal" value="${row.qty}" onfocus="this.select()" oninput="updateStock(${i},'qty',sanitizeNum(this.value))"></td>
       <td class="num">${priceInputHtml}</td>
       <td class="num">${fmt(value)}</td>
       <td><button class="del-btn" onclick="delRow('stocks',${i})">✕</button></td>`;
@@ -392,7 +575,19 @@ function updateStockPrice(i, v){
 function saveApiKey(v){
   finnhubKey = v.trim();
   localStorage.setItem("finnhubKey", finnhubKey);
+  updateKeyStatus();
   fetchAllPrices();
+}
+function toggleKeyVisibility(){
+  const input = document.getElementById("finnhubKey");
+  const btn = document.getElementById("toggleKeyBtn");
+  if(input.type === "password"){ input.type = "text"; btn.textContent = "Hide"; }
+  else { input.type = "password"; btn.textContent = "Show"; }
+}
+function updateKeyStatus(){
+  const el = document.getElementById("keyStatus");
+  if(!el) return;
+  el.textContent = finnhubKey ? "Key saved — used for live crypto & stock prices." : "No key set — prices won't load until one is added.";
 }
 
 function renderOther(){
@@ -400,15 +595,47 @@ function renderOther(){
   body.innerHTML = "";
   let total = 0;
   state.other.forEach((row, i) => {
-    total += Number(row.value)||0;
+    const isUsd = row.currency === "USD";
+    const raw = Number(row.value)||0;
+    const gbpValue = isUsd ? raw * (usdToGbp||0) : raw;
+    total += gbpValue;
+    const convertNote = isUsd ? `<div class="price-tag" style="text-align:right;margin-top:2px;">≈ ${fmt(gbpValue)}</div>` : "";
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td><input id="other-desc-${i}" value="${row.desc||""}" placeholder="e.g. Pension" oninput="updateOther(${i},'desc',this.value)"></td>
-      <td class="num"><input id="other-value-${i}" class="num-input" type="text" inputmode="decimal" value="${row.value}" oninput="updateOther(${i},'value',sanitizeNum(this.value))"></td>
+      <td class="num">
+        <input id="other-value-${i}" class="num-input" type="text" inputmode="decimal" value="${row.value}" onfocus="this.select()" oninput="updateOther(${i},'value',sanitizeNum(this.value))">
+        ${convertNote}
+      </td>
+      <td style="text-align:center;"><input type="checkbox" ${isUsd?"checked":""} onchange="updateOther(${i},'currency',this.checked?'USD':'GBP')"></td>
       <td><button class="del-btn" onclick="delRow('other',${i})">✕</button></td>`;
     body.appendChild(tr);
   });
   document.getElementById("otherTotal").textContent = fmt(total);
+  return total;
+}
+
+function renderDebt(){
+  const body = document.getElementById("debtBody");
+  body.innerHTML = "";
+  let total = 0;
+  let totalInterest = 0;
+  state.debt.forEach((row, i) => {
+    const balance = Number(row.value)||0;
+    const apr = Number(row.apr)||0;
+    const yearlyInterest = balance * (apr/100);
+    total += balance;
+    totalInterest += yearlyInterest;
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><input id="debt-desc-${i}" value="${row.desc||""}" placeholder="e.g. Credit card" oninput="updateDebt(${i},'desc',this.value)"></td>
+      <td class="num"><input id="debt-value-${i}" class="num-input" type="text" inputmode="decimal" value="${row.value}" onfocus="this.select()" oninput="updateDebt(${i},'value',sanitizeNum(this.value))"></td>
+      <td class="num"><input id="debt-apr-${i}" class="num-input" type="text" inputmode="decimal" value="${row.apr}" onfocus="this.select()" oninput="updateDebt(${i},'apr',sanitizeNum(this.value))"></td>
+      <td class="num" style="color:var(--muted);">${fmt(yearlyInterest)}</td>
+      <td><button class="del-btn" onclick="delRow('debt',${i})">✕</button></td>`;
+    body.appendChild(tr);
+  });
+  document.getElementById("debtTotal").textContent = "-" + fmt(total);
   return total;
 }
 
@@ -417,9 +644,15 @@ function renderAll(){
   const crypto = renderCrypto();
   const stocks = renderStocks();
   const other = renderOther();
+  const debt = renderDebt();
   const invest = crypto + stocks + other;
+  const net = bank + invest - debt;
   document.getElementById("investSub").textContent = fmt(invest);
-  document.getElementById("netWorthTotal").textContent = fmt(bank + invest);
+  document.getElementById("debtSub").textContent = "-" + fmt(debt);
+  document.getElementById("netWorthTotal").textContent = fmt(net);
+  renderAllocation(bank, crypto, stocks, other, debt);
+  const history = recordHistorySnapshot(net, bank, invest, debt);
+  renderHistory(history);
   save();
 }
 
@@ -427,11 +660,13 @@ function updateBank(i,k,v){ state.banking[i][k]=v; withFocusPreserved(renderAll)
 function updateCrypto(i,k,v){ state.crypto[i][k]=v; withFocusPreserved(renderAll); }
 function updateStock(i,k,v){ state.stocks[i][k]=v; withFocusPreserved(renderAll); }
 function updateOther(i,k,v){ state.other[i][k]=v; withFocusPreserved(renderAll); }
+function updateDebt(i,k,v){ state.debt[i][k]=v; withFocusPreserved(renderAll); }
 function delRow(table,i){ state[table].splice(i,1); renderAll(); }
-function addBankRow(){ state.banking.push({account:"",inst:"",balance:0}); renderAll(); }
+function addBankRow(){ state.banking.push({account:"",inst:"",balance:0,currency:"GBP"}); renderAll(); }
 function addCryptoRow(){ state.crypto.push({symbol:"",qty:0}); renderAll(); }
 function addStockRow(){ state.stocks.push({ticker:"",qty:0}); renderAll(); }
-function addOtherRow(){ state.other.push({desc:"",value:0}); renderAll(); }
+function addOtherRow(){ state.other.push({desc:"",value:0,currency:"GBP"}); renderAll(); }
+function addDebtRow(){ state.debt.push({desc:"",value:0,apr:0}); renderAll(); }
 
 async function fetchFxRate(){
   try{
@@ -489,17 +724,299 @@ async function fetchStockPrices(){
 }
 
 async function fetchAllPrices(){
-  if(!finnhubKey){ renderAll(); return; }
   await fetchFxRate();
-  await fetchCryptoPrices();
-  await fetchStockPrices();
+  if(finnhubKey){
+    await fetchCryptoPrices();
+    await fetchStockPrices();
+  }
+  renderAll();
 }
 
 function tickClock(){
   document.getElementById("clock").textContent = new Date().toLocaleString("en-GB");
 }
 
+async function deriveKey(password, salt){
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey("raw", enc.encode(password), {name:"PBKDF2"}, false, ["deriveKey"]);
+  return crypto.subtle.deriveKey(
+    {name:"PBKDF2", salt: salt, iterations: 100000, hash:"SHA-256"},
+    keyMaterial,
+    {name:"AES-GCM", length:256},
+    false,
+    ["encrypt","decrypt"]
+  );
+}
+function bufToBase64(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))); }
+function base64ToBuf(b64){
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+  return arr.buffer;
+}
+
+async function exportBackup(){
+  const statusEl = document.getElementById("backupStatus");
+  const password = prompt("Set a password to encrypt this backup (you'll need it to restore — there's no recovery if you forget it):");
+  if(!password){ return; }
+  try{
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const key = await deriveKey(password, salt);
+    const enc = new TextEncoder();
+    const exportData = { ...state, _finnhubKey: finnhubKey };
+    const ciphertext = await crypto.subtle.encrypt({name:"AES-GCM", iv}, key, enc.encode(JSON.stringify(exportData)));
+    const payload = { v:1, salt: bufToBase64(salt), iv: bufToBase64(iv), data: bufToBase64(ciphertext) };
+    const blob = new Blob([JSON.stringify(payload)], {type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `ledger-backup-${new Date().toISOString().slice(0,10)}.ledger`;
+    a.click();
+    URL.revokeObjectURL(url);
+    localStorage.setItem("ledgerLastBackup", String(Date.now()));
+    checkBackupBanner();
+    statusEl.textContent = "Backup exported and encrypted.";
+    statusEl.style.color = "var(--green)";
+  }catch(e){
+    statusEl.textContent = "Export failed: " + e.message;
+    statusEl.style.color = "var(--red)";
+  }
+}
+
+async function importBackup(event){
+  const file = event.target.files[0];
+  if(!file) return;
+  const statusEl = document.getElementById("backupStatus");
+  try{
+    const payload = JSON.parse(await file.text());
+    const password = prompt("Enter the password for this backup:");
+    if(!password){ event.target.value = ""; return; }
+    const salt = new Uint8Array(base64ToBuf(payload.salt));
+    const iv = new Uint8Array(base64ToBuf(payload.iv));
+    const key = await deriveKey(password, salt);
+    const plaintextBuf = await crypto.subtle.decrypt({name:"AES-GCM", iv}, key, base64ToBuf(payload.data));
+    const restored = JSON.parse(new TextDecoder().decode(plaintextBuf));
+    if(restored._finnhubKey !== undefined){
+      finnhubKey = restored._finnhubKey || "";
+      localStorage.setItem("finnhubKey", finnhubKey);
+      document.getElementById("finnhubKey").value = finnhubKey;
+      updateKeyStatus();
+      delete restored._finnhubKey;
+    }
+    state = restored;
+    if(!Array.isArray(state.debt)) state.debt = [];
+    if(!Array.isArray(state.banking)) state.banking = [];
+    if(!Array.isArray(state.other)) state.other = [];
+    state.banking.forEach(r => { if(r.currency === undefined) r.currency = "GBP"; });
+    state.other.forEach(r => { if(r.currency === undefined) r.currency = "GBP"; });
+    state.debt.forEach(r => { if(r.apr === undefined) r.apr = 0; });
+    renderAll();
+    fetchAllPrices();
+    statusEl.textContent = "Backup restored successfully.";
+    statusEl.style.color = "var(--green)";
+  }catch(e){
+    statusEl.textContent = "Wrong password, or corrupted file.";
+    statusEl.style.color = "var(--red)";
+  }
+  event.target.value = "";
+}
+
+// ---------- ALLOCATION DONUT ----------
+function renderAllocation(bank, crypto, stocks, other, debt){
+  const segments = [
+    {name:"Banking", value:bank, hex:"#3ECF8E"},
+    {name:"Crypto", value:crypto, hex:"#F2A900"},
+    {name:"Stocks", value:stocks, hex:"#4A9EFF"},
+    {name:"Other", value:other, hex:"#9B7EDE"}
+  ].filter(s => s.value > 0);
+  const total = segments.reduce((a,s)=>a+s.value, 0);
+  const chartEl = document.getElementById("allocationChart");
+  const legendEl = document.getElementById("allocationLegend");
+  if(!chartEl || !legendEl) return;
+  if(total <= 0){
+    chartEl.innerHTML = '<div class="price-tag">Add some assets to see allocation.</div>';
+    legendEl.innerHTML = "";
+    return;
+  }
+  const r = 60, cx = 70, cy = 70, circumference = 2*Math.PI*r;
+  let offset = 0;
+  let circles = "";
+  segments.forEach(s => {
+    const frac = s.value/total;
+    const dash = frac*circumference;
+    circles += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${s.hex}" stroke-width="22"
+      stroke-dasharray="${dash} ${circumference-dash}" stroke-dashoffset="${-offset}" transform="rotate(-90 ${cx} ${cy})"/>`;
+    offset += dash;
+  });
+  chartEl.innerHTML = `<svg width="140" height="140" viewBox="0 0 140 140">${circles}</svg>`;
+  legendEl.innerHTML = segments.map(s => `
+    <div class="legend-row">
+      <span class="legend-dot" style="background:${s.hex};"></span>
+      <span class="name">${s.name}</span>
+      <span class="pct">${((s.value/total)*100).toFixed(1)}%</span>
+      <span class="amt">${fmt(s.value)}</span>
+    </div>`).join("");
+}
+
+// ---------- NET WORTH HISTORY ----------
+function recordHistorySnapshot(net, bank, invest, debt){
+  const today = new Date().toISOString().slice(0,10);
+  let history = JSON.parse(localStorage.getItem("ledgerHistory") || "[]");
+  const idx = history.findIndex(h => h.date === today);
+  const entry = {date: today, net, bank, invest, debt};
+  if(idx >= 0) history[idx] = entry; else history.push(entry);
+  history = history.slice(-180);
+  localStorage.setItem("ledgerHistory", JSON.stringify(history));
+  return history;
+}
+
+function renderHistory(history){
+  const el = document.getElementById("historyChart");
+  if(!el) return;
+  if(!history || history.length < 2){
+    el.innerHTML = '<div class="price-tag">Come back another day to see your trend — one data point per day is recorded automatically.</div>';
+    return;
+  }
+  const w = 680, h = 180, pad = 30;
+  const values = history.map(hh => hh.net);
+  const minV = Math.min(...values, 0);
+  const maxV = Math.max(...values, 1);
+  const range = maxV - minV || 1;
+  const stepX = (w - pad*2) / (history.length - 1);
+  const pts = history.map((entry,i) => {
+    const x = pad + i*stepX;
+    const y = (h - pad) - ((entry.net - minV)/range) * (h - pad*2);
+    return `${x},${y}`;
+  }).join(" ");
+  const first = history[0].net, last = history[history.length-1].net;
+  const change = last - first;
+  const changeColor = change >= 0 ? "var(--green)" : "var(--red)";
+  const changeSign = change >= 0 ? "+" : "";
+  el.innerHTML = `
+    <svg width="100%" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">
+      <polyline points="${pts}" fill="none" stroke="var(--amber)" stroke-width="2"/>
+    </svg>
+    <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:4px;">
+      <span>${history[0].date}</span>
+      <span style="color:${changeColor};">${changeSign}${fmt(Math.abs(change))} since first record</span>
+      <span>${history[history.length-1].date}</span>
+    </div>`;
+}
+
+// ---------- CSV EXPORT ----------
+function csvEscape(v){
+  const s = String(v ?? "");
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+}
+function exportCsv(){
+  const rows = [["Category","Description","Detail","Amount (GBP)"]];
+  state.banking.forEach(r => rows.push(["Banking", r.account||"", r.inst||"", (r.currency==="USD" ? (Number(r.balance)||0)*(usdToGbp||0) : Number(r.balance)||0).toFixed(2)]));
+  state.crypto.forEach(r => {
+    const price = (livePrices[(r.symbol||"").toUpperCase()]||0)*(usdToGbp||0);
+    rows.push(["Crypto", r.symbol||"", `qty ${r.qty}`, ((Number(r.qty)||0)*price).toFixed(2)]);
+  });
+  state.stocks.forEach(r => {
+    const liveUsd = liveStockPrices[(r.ticker||"").toUpperCase()];
+    const priceGbp = r.priceOverride ? Number(r.priceOverride) : (liveUsd && usdToGbp ? liveUsd*usdToGbp : 0);
+    rows.push(["Stocks", r.ticker||"", `qty ${r.qty}`, ((Number(r.qty)||0)*priceGbp).toFixed(2)]);
+  });
+  state.other.forEach(r => rows.push(["Other", r.desc||"", "", (r.currency==="USD" ? (Number(r.value)||0)*(usdToGbp||0) : Number(r.value)||0).toFixed(2)]));
+  state.debt.forEach(r => rows.push(["Debt", r.desc||"", `APR ${r.apr||0}%`, "-" + (Number(r.value)||0).toFixed(2)]));
+  const csv = rows.map(row => row.map(csvEscape).join(",")).join("\n");
+  const blob = new Blob([csv], {type:"text/csv"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `ledger-export-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ---------- BACKUP REMINDER BANNER ----------
+function checkBackupBanner(){
+  const el = document.getElementById("backupBanner");
+  const textEl = document.getElementById("backupBannerText");
+  if(!el || !textEl) return;
+  const last = localStorage.getItem("ledgerLastBackup");
+  let daysAgo = null;
+  if(last) daysAgo = Math.floor((Date.now() - Number(last)) / 86400000);
+  if(daysAgo === null){
+    textEl.textContent = "You haven't backed up yet. Since data lives only in this browser, it's worth exporting a backup.";
+    el.style.display = "flex";
+  } else if(daysAgo >= 14){
+    textEl.textContent = `Last backup was ${daysAgo} days ago.`;
+    el.style.display = "flex";
+  } else {
+    el.style.display = "none";
+  }
+}
+
+// ---------- PIN LOCK ----------
+async function hashPin(pin, saltB64){
+  const enc = new TextEncoder();
+  const digest = await crypto.subtle.digest("SHA-256", enc.encode(saltB64+":"+pin));
+  return bufToBase64(digest);
+}
+async function verifyPin(pin){
+  const salt = localStorage.getItem("ledgerPinSalt");
+  const storedHash = localStorage.getItem("ledgerPinHash");
+  if(!salt || !storedHash) return true;
+  return (await hashPin(pin, salt)) === storedHash;
+}
+async function setPinLock(){
+  if(localStorage.getItem("ledgerPinHash")){
+    const current = prompt("Enter your current PIN to change or remove it:");
+    if(current === null) return;
+    if(!(await verifyPin(current))){ alert("Incorrect PIN."); return; }
+  }
+  const newPin = prompt("Enter a new PIN (leave blank to remove the lock):");
+  if(newPin === null) return;
+  if(newPin === ""){
+    localStorage.removeItem("ledgerPinHash");
+    localStorage.removeItem("ledgerPinSalt");
+    updatePinStatus();
+    return;
+  }
+  const confirmPin = prompt("Confirm new PIN:");
+  if(confirmPin !== newPin){ alert("PINs didn't match — nothing changed."); return; }
+  const salt = bufToBase64(crypto.getRandomValues(new Uint8Array(16)));
+  localStorage.setItem("ledgerPinSalt", salt);
+  localStorage.setItem("ledgerPinHash", await hashPin(newPin, salt));
+  updatePinStatus();
+}
+function updatePinStatus(){
+  const el = document.getElementById("pinStatus");
+  const btn = document.getElementById("pinBtn");
+  if(!el || !btn) return;
+  const enabled = !!localStorage.getItem("ledgerPinHash");
+  el.textContent = enabled ? "PIN lock is on." : "No PIN set — the dashboard opens straight away.";
+  btn.textContent = enabled ? "Change / remove PIN" : "Set a PIN";
+}
+async function attemptUnlock(){
+  const input = document.getElementById("lockPinInput");
+  const errorEl = document.getElementById("lockError");
+  if(await verifyPin(input.value)){
+    document.getElementById("lockOverlay").style.display = "none";
+  } else {
+    errorEl.textContent = "Incorrect PIN.";
+    input.value = "";
+    input.focus();
+  }
+}
+function checkLockOnLoad(){
+  if(localStorage.getItem("ledgerPinHash")){
+    document.getElementById("lockOverlay").style.display = "flex";
+    document.getElementById("lockPinInput").focus();
+  }
+}
+
 document.getElementById("finnhubKey").value = finnhubKey;
+applyAllPanelStates();
+updateKeyStatus();
+updatePinStatus();
+checkLockOnLoad();
+checkBackupBanner();
 renderAll();
 fetchAllPrices();
 setInterval(fetchAllPrices, 60000);
