@@ -2,7 +2,7 @@
 
 A beautiful, single-file, self-hosted net worth dashboard with live prices. Built for privacy, simplicity, and daily use.
 
-![Net Worth Dashboard](screenshot.png)
+![Net Worth Dashboard](screenshot-1.PNG)
 
 ## Features
 
@@ -17,7 +17,9 @@ A beautiful, single-file, self-hosted net worth dashboard with live prices. Buil
 
 ## Screenshots
 
-*(place holder)*
+[Net Worth Dashboard Overview](screenshot-1.PNG)
+
+[Allocation and History Charts](screenshot-2.PNG)
 
 ## Quick Start
 
