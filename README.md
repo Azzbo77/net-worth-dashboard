@@ -1,41 +1,65 @@
-# Net Worth Dashboard
+# Net Worth dashboard
 
-A single-file, self-hosted net worth tracker with live crypto and stock prices. No backend, no database, no build step — just one HTML file.
+A beautiful, single-file, self-hosted net worth dashboard with live prices. Built for privacy, simplicity, and daily use.
 
-## What it does
+![Net Worth Dashboard](screenshot.png)
 
-- Tracks **banking/cash**, **crypto**, **stocks**, and **other investments** (pensions, platform totals, etc.) in one place
-- Crypto and stock prices refresh automatically every 60 seconds via the [Finnhub](https://finnhub.io) API
-- USD prices are converted to GBP live using [Frankfurter](https://frankfurter.dev) (free, no key required)
-- If a ticker isn't supported by Finnhub's free tier (e.g. non-US exchanges like `.TO`, `.L`), the price field falls back to manual entry automatically
-- All your data — balances, holdings, API key — is stored in your browser's `localStorage`. Nothing is sent anywhere except live price lookups. Nothing is written back into this file.
+## Features
 
-## Setup
+- **All-in-one view**: Banking & cash, Crypto, Stocks & Funds, Other investments, Debt & liabilities
+- **Live prices**: Crypto (any symbol) and US-listed stocks via [Finnhub](https://finnhub.io) — refreshes every 60 seconds
+- **Automatic GBP conversion**: USD holdings use live USD→GBP rate from [Frankfurter](https://frankfurter.dev)
+- **Smart fallbacks**: Manual price entry for non-supported tickers (e.g. UK .L, Canadian .TO)
+- **Visuals**: Allocation donut chart + 180-day net worth trend
+- **Privacy-first**: Everything stored in browser `localStorage`. No accounts, no backend, no telemetry.
+- **Secure backup**: Encrypted export/import (AES-GCM) with optional PIN lock
+- **Zero build step**: One HTML file with inline CSS + vanilla JS
 
-1. Open `index.html` in a browser (or host it — see below)
-2. Get a free API key from [finnhub.io](https://finnhub.io/register)
-3. Paste the key into the box at the top of the page — it's remembered from then on
-4. Add your accounts, crypto holdings (any ticker, e.g. `BTC`, `ETH`), and US-listed stock tickers (e.g. `AAPL`)
+## Screenshots
 
-## Hosting it properly
+*(place holder)*
 
-Opening the file directly (`file://`) works, but for reliability across browsers/devices, serve it behind a real web server:
+## Quick Start
 
+1. Download [`index.html`](index.html)
+2. Open it in any modern browser
+3. (Optional but recommended) Get a free [Finnhub API key](https://finnhub.io/register) and paste it in **Settings**
+4. Start adding your accounts and holdings
+
+**Pro tip**: Host it properly (see below) for best experience across devices.
+
+## Hosting
+
+### Easiest options (recommended)
+- **GitHub Pages** — Perfect for pointing at your own domain
+- Cloudflare Pages, Netlify, Vercel, or any static host
+
+### Self-hosted (homelab style)
 ```bash
-# nginx / Caddy / your reverse proxy of choice
-# just point a location block at this file, e.g.:
-caddy file-server --root /path/to/this/folder
+## Caddy (one-liner)
+caddy file-server --root /path/to/net-worth-ledger --listen :8080
 ```
+Since it's a single static file, it works great behind authentication (Authelia, OAuth2 Proxy, etc.) if you want extra protection.
 
-Or drop it in any static site host — GitHub Pages, Cloudflare Pages, Netlify all work since it's a single static file with no build step.
+## Data & Privacy
+
+All data lives only in your browser.
+- Your Finnhub key is stored in localStorage (never leaves your device except for price API calls).
+- Encrypted backups include the API key so you can restore everything easily.
+- No sync by design — keeps the project zero-dependency. Export/import is the intended way to move data.
+
+See docs/privacy.md for more details.
 
 ## Limitations
 
-- **Stocks**: Finnhub's free tier only covers US-listed equities. UK/European/Canadian tickers will show a manual-entry prompt instead of a live price.
-- **FX rate**: uses a live USD→GBP rate each refresh cycle; if the FX API is ever unreachable, it falls back to a rough hardcoded rate (0.79) rather than breaking the totals.
-- **Rate limits**: Finnhub's free tier allows 60 API calls/minute. Fine for a personal portfolio; if you add a large number of holdings, you may hit this.
-- **No sync across devices**: since data lives in browser localStorage, it won't follow you between browsers/devices. If you need that, you'd need to add a small backend — not included here by design (keeps this a zero-dependency single file).
+- Finnhub free tier: 60 calls/minute and US-listed stocks only
+- No multi-device live sync (use encrypted backup or add your own backend)
+- Debt interest is a simple estimate
 
-## Editing
+## Contributing
+Contributions welcome! This is intentionally kept as a single file for simplicity, but improvements to UX, charts, or new asset types are appreciated.
 
-It's one HTML file with inline CSS and vanilla JS — no framework, no build tooling. Open it in any text editor to tweak styling, add more crypto/stock rows, or change the refresh interval (`setInterval(fetchAllPrices, 60000)` near the bottom).
+## License
+MIT License — feel free to fork and modify.
+
+Made for personal use with zero waste and maximum sovereignty.
