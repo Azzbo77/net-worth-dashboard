@@ -232,9 +232,60 @@
     background:transparent;color:var(--text);border:1px solid var(--line);
     padding:6px 12px;font-size:11px;cursor:pointer;
   }
+  .danger-btn{
+    background:transparent;color:var(--red);border:1px solid #3A1F22;
+    padding:6px 12px;font-size:11px;cursor:pointer;
+  }
+  #toast{
+    position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:#1A1E24;border:1px solid var(--line);color:var(--text);
+    padding:10px 16px;font-size:13px;display:flex;align-items:center;gap:14px;
+    z-index:10000;opacity:0;pointer-events:none;transition:opacity 0.2s ease, transform 0.2s ease;
+    box-shadow:0 4px 16px rgba(0,0,0,0.4);
+  }
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto;}
+  #toast button{
+    background:var(--amber);color:#000;border:none;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap;
+  }
+  .drag-handle{
+    cursor:grab;color:var(--muted);text-align:center;width:24px;user-select:none;
+  }
+  .drag-handle:active{cursor:grabbing;}
+  tr.drag-over{border-top:2px solid var(--amber);}
+  @keyframes flashUpdate{
+    0%{background:rgba(242,169,0,0.25);}
+    100%{background:transparent;}
+  }
+  .flash{animation:flashUpdate 0.9s ease-out;}
+  .autocomplete-wrap{position:relative;}
+  .autocomplete-list{
+    position:absolute;top:100%;left:0;right:0;z-index:100;
+    background:#1A1E24;border:1px solid var(--line);max-height:180px;overflow-y:auto;
+    display:none;
+  }
+  .autocomplete-list.show{display:block;}
+  .autocomplete-item{
+    padding:6px 10px;font-size:12px;cursor:pointer;display:flex;justify-content:space-between;gap:10px;
+  }
+  .autocomplete-item:hover, .autocomplete-item.active{background:rgba(242,169,0,0.12);}
+  .autocomplete-item .sym{font-family:var(--mono);color:var(--text);}
+  .autocomplete-item .desc{color:var(--muted);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .archive-toggle{
+    padding:8px 16px;font-size:11px;color:var(--muted);cursor:pointer;border-top:1px solid var(--line);
+  }
+  .archive-toggle:hover{color:var(--text);}
+  .archive-list{padding:0 16px 12px;}
+  .archive-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;font-size:12px;color:var(--muted);border-bottom:1px solid var(--line);}
+  .archive-row:last-child{border-bottom:none;}
+  .archive-row button{background:none;border:1px solid var(--line);color:var(--muted);font-size:10px;padding:2px 8px;cursor:pointer;}
+  .goal-line-label{font-family:var(--mono);font-size:10px;fill:var(--purple);}
 </style>
 </head>
 <body>
+<div id="toast">
+  <span id="toastMsg"></span>
+  <button id="toastUndoBtn" onclick="undoDelete()">Undo</button>
+</div>
 <div id="lockOverlay">
   <div style="font-family:var(--mono);color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:0.1em;">Locked</div>
   <input id="lockPinInput" type="password" placeholder="PIN" onkeydown="if(event.key==='Enter')attemptUnlock()">
@@ -270,6 +321,19 @@
         <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">PIN lock (deters casual glances — not real security)</div>
         <button onclick="setPinLock()" id="pinBtn" class="small-btn">Set a PIN</button>
         <div id="pinStatus" style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:8px;"></div>
+        <div id="lockTimeoutRow" style="margin-top:10px;display:none;align-items:center;gap:8px;">
+          <span style="font-size:11px;color:var(--muted);">Auto-relock after</span>
+          <select id="lockTimeoutSelect" onchange="saveLockTimeout(this.value)" style="background:transparent;border:1px solid var(--line);color:var(--text);font-size:11px;padding:4px 6px;">
+            <option value="0">Never</option>
+            <option value="1">1 minute</option>
+            <option value="5">5 minutes</option>
+            <option value="15">15 minutes</option>
+          </select>
+        </div>
+      </div>
+      <div class="settings-row">
+        <div style="font-size:11px;color:var(--red);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">Danger zone</div>
+        <button onclick="clearAllData()" class="danger-btn">Clear all data on this device</button>
       </div>
     </div>
   </div>
@@ -293,7 +357,7 @@
     <div class="panel-body" id="body-banking">
       <table>
         <thead>
-          <tr><th>Account</th><th>Institution</th><th class="num">Balance</th><th style="text-align:center;">USD</th><th></th></tr>
+          <tr><th></th><th>Account</th><th>Institution</th><th class="num">Balance</th><th style="text-align:center;">USD</th><th></th></tr>
         </thead>
         <tbody id="bankingBody"></tbody>
       </table>
@@ -310,7 +374,7 @@
     <div class="panel-body" id="body-crypto">
       <table>
         <thead>
-          <tr><th>Asset</th><th class="num">Quantity</th><th class="num">Price (£)</th><th class="num">Value (£)</th><th></th></tr>
+          <tr><th></th><th>Asset</th><th class="num">Quantity</th><th class="num">Price (£)</th><th class="num">Value (£)</th><th></th></tr>
         </thead>
         <tbody id="cryptoBody"></tbody>
       </table>
@@ -327,7 +391,7 @@
     <div class="panel-body" id="body-stocks">
       <table>
         <thead>
-          <tr><th>Ticker (US-listed)</th><th class="num">Quantity</th><th class="num">Price (£)</th><th class="num">Value (£)</th><th></th></tr>
+          <tr><th></th><th>Ticker (US-listed)</th><th class="num">Quantity</th><th class="num">Price (£)</th><th class="num">Value (£)</th><th></th></tr>
         </thead>
         <tbody id="stocksBody"></tbody>
       </table>
@@ -344,7 +408,7 @@
     <div class="panel-body" id="body-other">
       <table>
         <thead>
-          <tr><th>Description</th><th class="num">Value</th><th style="text-align:center;">USD</th><th></th></tr>
+          <tr><th></th><th>Description</th><th class="num">Value</th><th style="text-align:center;">USD</th><th></th></tr>
         </thead>
         <tbody id="otherBody"></tbody>
       </table>
@@ -361,11 +425,12 @@
     <div class="panel-body" id="body-debt">
       <table>
         <thead>
-          <tr><th>Description</th><th class="num">Balance owed (£)</th><th class="num">APR %</th><th class="num">Est. yearly interest</th><th></th></tr>
+          <tr><th></th><th>Description</th><th class="num">Balance owed (£)</th><th class="num">APR %</th><th class="num">Est. yearly interest</th><th></th></tr>
         </thead>
         <tbody id="debtBody"></tbody>
       </table>
       <button class="add-row" onclick="addDebtRow()" style="color:var(--red);">+ add debt</button>
+      <div id="archivedDebtWrap"></div>
     </div>
   </div>
 
@@ -386,6 +451,14 @@
       <h2>Net Worth History <span class="chevron" id="chev-history">▾</span></h2>
     </div>
     <div class="panel-body" id="body-history">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--line);display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        <span style="font-size:11px;color:var(--muted);">Goal:</span>
+        <input id="goalAmount" type="text" inputmode="decimal" placeholder="Target £" style="background:transparent;border:1px solid var(--line);color:var(--text);font-family:var(--mono);font-size:12px;padding:4px 8px;width:110px;" onfocus="this.select()" oninput="updateGoal('amount', sanitizeNum(this.value))">
+        <span style="font-size:11px;color:var(--muted);">by</span>
+        <input id="goalDate" type="date" style="background:transparent;border:1px solid var(--line);color:var(--text);font-family:var(--mono);font-size:12px;padding:4px 8px;" onchange="updateGoal('date', this.value)">
+        <span style="flex:1;"></span>
+        <button onclick="recordManualSnapshot()" class="small-btn">Record snapshot now</button>
+      </div>
       <div class="chart-wrap" id="historyChart"></div>
     </div>
   </div>
@@ -402,8 +475,11 @@
         <button onclick="exportCsv()" class="small-btn">Export CSV (unencrypted)</button>
         <input type="file" id="importFile" accept=".ledger,.json" style="display:none;" onchange="importBackup(event)">
       </div>
-      <div style="padding:0 16px 14px;">
+      <div style="padding:0 16px 6px;">
         <span id="backupStatus" style="font-size:11px;color:var(--muted);font-family:var(--mono);"></span>
+      </div>
+      <div style="padding:0 16px 14px;font-size:11px;color:var(--muted);">
+        The exported <code>.ledger</code> file is encrypted — safe to store or sync (iCloud, OneDrive, etc.). Just never keep the password in the same place as the file.
       </div>
     </div>
   </div>
@@ -417,17 +493,21 @@
 function cryptoFinnhubSymbol(sym){ return `BINANCE:${(sym||"").toUpperCase()}USDT`; }
 
 let state = JSON.parse(localStorage.getItem("ledgerState") || "null") || {
-  banking: [{account:"Current account", inst:"", balance:0, currency:"GBP"}],
-  crypto: [{symbol:"BTC", qty:0}],
-  stocks: [{ticker:"", qty:0}],
-  other: [{desc:"", value:0, currency:"GBP"}],
-  debt: [{desc:"", value:0, apr:0}]
+  banking: [{account:"Current account", inst:"", balance:0, currency:"GBP", notes:""}],
+  crypto: [{symbol:"BTC", qty:0, notes:""}],
+  stocks: [{ticker:"", qty:0, notes:""}],
+  other: [{desc:"", value:0, currency:"GBP", notes:""}],
+  debt: [{desc:"", value:0, apr:0, notes:"", archived:false}],
+  goal: {amount:0, date:""}
 };
 
 if(!Array.isArray(state.debt)) state.debt = [{desc:"", value:0}];
-state.banking.forEach(r => { if(r.currency === undefined) r.currency = "GBP"; });
-state.other.forEach(r => { if(r.currency === undefined) r.currency = "GBP"; });
-state.debt.forEach(r => { if(r.apr === undefined) r.apr = 0; });
+state.banking.forEach(r => { if(r.currency === undefined) r.currency = "GBP"; if(r.notes === undefined) r.notes = ""; });
+state.other.forEach(r => { if(r.currency === undefined) r.currency = "GBP"; if(r.notes === undefined) r.notes = ""; });
+state.debt.forEach(r => { if(r.apr === undefined) r.apr = 0; if(r.notes === undefined) r.notes = ""; if(r.archived === undefined) r.archived = false; });
+state.crypto.forEach(r => { if(r.notes === undefined) r.notes = ""; });
+state.stocks.forEach(r => { if(r.notes === undefined) r.notes = ""; });
+if(!state.goal) state.goal = {amount:0, date:""};
 
 let livePrices = {};
 let liveStockPrices = {};
@@ -452,7 +532,58 @@ function applyAllPanelStates(){
   ["banking","crypto","stocks","other","debt","allocation","history","backup","settings"].forEach(applyPanelState);
 }
 
-function save(){ localStorage.setItem("ledgerState", JSON.stringify(state)); }
+// ---------- DRAG TO REORDER ----------
+let dragSource = null;
+function dragStart(e, table, i){
+  dragSource = {table, index:i};
+  e.dataTransfer.effectAllowed = "move";
+  try{ e.dataTransfer.setData("text/plain", String(i)); }catch(err){}
+}
+function dragOver(e){ e.preventDefault(); e.currentTarget.classList.add("drag-over"); }
+function dragLeave(e){ e.currentTarget.classList.remove("drag-over"); }
+function dragEndCleanup(){ document.querySelectorAll("tr.drag-over").forEach(el=>el.classList.remove("drag-over")); }
+function dropRow(e, table, i){
+  e.preventDefault();
+  dragEndCleanup();
+  if(!dragSource || dragSource.table !== table){ dragSource = null; return; }
+  const arr = state[table];
+  const [moved] = arr.splice(dragSource.index, 1);
+  const newIndex = dragSource.index < i ? i - 1 : i;
+  arr.splice(newIndex, 0, moved);
+  dragSource = null;
+  renderAll();
+}
+
+// ---------- UNDO DELETE TOAST ----------
+let lastDeleted = null;
+let toastTimer = null;
+const TABLE_LABELS = {banking:"Banking", crypto:"Crypto", stocks:"Stocks", other:"Other Investments", debt:"Debt"};
+function showToast(msg, withUndo){
+  clearTimeout(toastTimer);
+  const toast = document.getElementById("toast");
+  document.getElementById("toastMsg").textContent = msg;
+  document.getElementById("toastUndoBtn").style.display = withUndo ? "inline-block" : "none";
+  toast.classList.add("show");
+  toastTimer = setTimeout(() => {
+    toast.classList.remove("show");
+    if(withUndo) lastDeleted = null;
+  }, 5000);
+}
+function undoDelete(){
+  if(!lastDeleted) return;
+  const {table, index, row} = lastDeleted;
+  state[table].splice(index, 0, row);
+  lastDeleted = null;
+  clearTimeout(toastTimer);
+  document.getElementById("toast").classList.remove("show");
+  renderAll();
+}
+
+let lastComputed = {net:0, bank:0, invest:0, debt:0};
+let lastNetWorth = null;
+
+let dataCleared = false;
+function save(){ if(dataCleared) return; localStorage.setItem("ledgerState", JSON.stringify(state)); }
 function fmt(n){ return "£" + (Number(n)||0).toLocaleString("en-GB",{minimumFractionDigits:2,maximumFractionDigits:2}); }
 function sanitizeNum(v){
   let s = (v||"").replace(/[^0-9.]/g, "");
@@ -490,8 +621,18 @@ function renderBanking(){
     total += gbpValue;
     const convertNote = isUsd ? `<div class="price-tag" style="text-align:right;margin-top:2px;">≈ ${fmt(gbpValue)}</div>` : "";
     const tr = document.createElement("tr");
+    tr.draggable = true;
+    tr.ondragstart = (e)=>dragStart(e,'banking',i);
+    tr.ondragover = dragOver;
+    tr.ondragleave = dragLeave;
+    tr.ondrop = (e)=>dropRow(e,'banking',i);
+    tr.ondragend = dragEndCleanup;
     tr.innerHTML = `
-      <td><input id="bank-account-${i}" value="${row.account||""}" placeholder="Account name" oninput="updateBank(${i},'account',this.value)"></td>
+      <td class="drag-handle">⋮⋮</td>
+      <td>
+        <input id="bank-account-${i}" value="${row.account||""}" placeholder="Account name" oninput="updateBank(${i},'account',this.value)">
+        <input value="${row.notes||""}" placeholder="Add note…" style="font-size:11px;color:var(--muted);margin-top:2px;" oninput="updateBank(${i},'notes',this.value)">
+      </td>
       <td><input id="bank-inst-${i}" value="${row.inst||""}" placeholder="Institution" oninput="updateBank(${i},'inst',this.value)"></td>
       <td class="num">
         <input id="bank-balance-${i}" class="num-input" type="text" inputmode="decimal" value="${row.balance}" onfocus="this.select()" oninput="updateBank(${i},'balance',sanitizeNum(this.value))">
@@ -522,8 +663,18 @@ function renderCrypto(){
     else if(priceGbp) priceCell = fmt(priceGbp);
     else priceCell = '<span class="price-tag">loading…</span>';
     const tr = document.createElement("tr");
+    tr.draggable = true;
+    tr.ondragstart = (e)=>dragStart(e,'crypto',i);
+    tr.ondragover = dragOver;
+    tr.ondragleave = dragLeave;
+    tr.ondrop = (e)=>dropRow(e,'crypto',i);
+    tr.ondragend = dragEndCleanup;
     tr.innerHTML = `
-      <td><input id="crypto-symbol-${i}" value="${row.symbol||""}" placeholder="e.g. BTC" style="text-transform:uppercase" oninput="updateCrypto(${i},'symbol',this.value.toUpperCase())"></td>
+      <td class="drag-handle">⋮⋮</td>
+      <td class="autocomplete-wrap">
+        <input id="crypto-symbol-${i}" value="${row.symbol||""}" placeholder="e.g. BTC" style="text-transform:uppercase" oninput="onCryptoSymbolInput(${i},this)" onblur="setTimeout(hideSuggestions,150)">
+        <input value="${row.notes||""}" placeholder="Add note…" style="font-size:11px;color:var(--muted);margin-top:2px;" oninput="updateCrypto(${i},'notes',this.value)">
+      </td>
       <td class="num"><input id="crypto-qty-${i}" class="num-input" type="text" inputmode="decimal" value="${row.qty}" onfocus="this.select()" oninput="updateCrypto(${i},'qty',sanitizeNum(this.value))"></td>
       <td class="num">${priceCell}</td>
       <td class="num">${fmt(value)}</td>
@@ -555,8 +706,18 @@ function renderStocks(){
       priceInputHtml = `<input id="stock-price-${i}" class="num-input" type="text" inputmode="decimal" value="${displayVal}" placeholder="${placeholder}" onfocus="this.select()" oninput="updateStockPrice(${i},sanitizeNum(this.value))">`;
     }
     const tr = document.createElement("tr");
+    tr.draggable = true;
+    tr.ondragstart = (e)=>dragStart(e,'stocks',i);
+    tr.ondragover = dragOver;
+    tr.ondragleave = dragLeave;
+    tr.ondrop = (e)=>dropRow(e,'stocks',i);
+    tr.ondragend = dragEndCleanup;
     tr.innerHTML = `
-      <td><input id="stock-ticker-${i}" value="${row.ticker||""}" placeholder="e.g. AAPL" style="text-transform:uppercase" oninput="updateStock(${i},'ticker',this.value.toUpperCase())"></td>
+      <td class="drag-handle">⋮⋮</td>
+      <td class="autocomplete-wrap">
+        <input id="stock-ticker-${i}" value="${row.ticker||""}" placeholder="e.g. AAPL" style="text-transform:uppercase" oninput="onStockTickerInput(${i},this)" onblur="setTimeout(hideSuggestions,150)">
+        <input value="${row.notes||""}" placeholder="Add note…" style="font-size:11px;color:var(--muted);margin-top:2px;" oninput="updateStock(${i},'notes',this.value)">
+      </td>
       <td class="num"><input id="stock-qty-${i}" class="num-input" type="text" inputmode="decimal" value="${row.qty}" onfocus="this.select()" oninput="updateStock(${i},'qty',sanitizeNum(this.value))"></td>
       <td class="num">${priceInputHtml}</td>
       <td class="num">${fmt(value)}</td>
@@ -570,6 +731,70 @@ function renderStocks(){
 function updateStockPrice(i, v){
   state.stocks[i].priceOverride = v === "" ? null : v;
   withFocusPreserved(renderAll);
+}
+
+// ---------- TICKER AUTOCOMPLETE ----------
+const CRYPTO_SUGGEST_LIST = ["BTC","ETH","SOL","ADA","XRP","DOGE","DOT","LTC","MATIC","LINK","AVAX","UNI","ATOM","XLM","ALGO","FIL","TRX","ETC","BCH","NEAR","APT","ARB","OP","SHIB","PEPE","ICP","HBAR","VET","SAND","MANA"];
+let acDebounce = null;
+let acCurrentInput = null;
+let acHideTimer = null;
+function scheduleHideSuggestions(){
+  clearTimeout(acHideTimer);
+  acHideTimer = setTimeout(hideSuggestions, 150);
+}
+function showSuggestions(inputEl, items){
+  clearTimeout(acHideTimer);
+  let box = document.getElementById("tickerSuggestions");
+  if(!box){
+    box = document.createElement("div");
+    box.id = "tickerSuggestions";
+    box.className = "autocomplete-list";
+    document.body.appendChild(box);
+  }
+  if(!items.length){ box.classList.remove("show"); return; }
+  const rect = inputEl.getBoundingClientRect();
+  box.style.position = "absolute";
+  box.style.left = (rect.left + window.scrollX) + "px";
+  box.style.top = (rect.bottom + window.scrollY) + "px";
+  box.style.width = rect.width + "px";
+  box.innerHTML = items.map(it => `<div class="autocomplete-item" onmousedown="selectSuggestion('${it.symbol}')"><span class="sym">${it.symbol}</span><span class="desc">${it.desc||""}</span></div>`).join("");
+  box.classList.add("show");
+  acCurrentInput = inputEl;
+}
+function hideSuggestions(){
+  const box = document.getElementById("tickerSuggestions");
+  if(box) box.classList.remove("show");
+}
+function selectSuggestion(symbol){
+  if(!acCurrentInput) return;
+  acCurrentInput.value = symbol;
+  acCurrentInput.dispatchEvent(new Event("input"));
+  hideSuggestions();
+}
+function onStockTickerInput(i, el){
+  updateStock(i, "ticker", el.value.toUpperCase());
+  clearTimeout(acDebounce);
+  const q = el.value.trim();
+  if(!q || !finnhubKey){ hideSuggestions(); return; }
+  acDebounce = setTimeout(async () => {
+    const liveEl = document.getElementById(`stock-ticker-${i}`);
+    if(!liveEl) return;
+    try{
+      const res = await fetch(`https://finnhub.io/api/v1/search?q=${encodeURIComponent(q)}&token=${finnhubKey}`);
+      const data = await res.json();
+      const items = (data.result||[]).filter(r=>r.type==="Common Stock").slice(0,8).map(r=>({symbol:r.symbol, desc:r.description}));
+      showSuggestions(liveEl, items);
+    }catch(e){ hideSuggestions(); }
+  }, 300);
+}
+function onCryptoSymbolInput(i, el){
+  updateCrypto(i, "symbol", el.value.toUpperCase());
+  const q = el.value.trim().toUpperCase();
+  if(!q){ hideSuggestions(); return; }
+  const liveEl = document.getElementById(`crypto-symbol-${i}`);
+  if(!liveEl) return;
+  const items = CRYPTO_SUGGEST_LIST.filter(c => c.startsWith(q) && c !== q).slice(0,8).map(c=>({symbol:c, desc:""}));
+  showSuggestions(liveEl, items);
 }
 
 function saveApiKey(v){
@@ -601,8 +826,18 @@ function renderOther(){
     total += gbpValue;
     const convertNote = isUsd ? `<div class="price-tag" style="text-align:right;margin-top:2px;">≈ ${fmt(gbpValue)}</div>` : "";
     const tr = document.createElement("tr");
+    tr.draggable = true;
+    tr.ondragstart = (e)=>dragStart(e,'other',i);
+    tr.ondragover = dragOver;
+    tr.ondragleave = dragLeave;
+    tr.ondrop = (e)=>dropRow(e,'other',i);
+    tr.ondragend = dragEndCleanup;
     tr.innerHTML = `
-      <td><input id="other-desc-${i}" value="${row.desc||""}" placeholder="e.g. Pension" oninput="updateOther(${i},'desc',this.value)"></td>
+      <td class="drag-handle">⋮⋮</td>
+      <td>
+        <input id="other-desc-${i}" value="${row.desc||""}" placeholder="e.g. Pension" oninput="updateOther(${i},'desc',this.value)">
+        <input value="${row.notes||""}" placeholder="Add note…" style="font-size:11px;color:var(--muted);margin-top:2px;" oninput="updateOther(${i},'notes',this.value)">
+      </td>
       <td class="num">
         <input id="other-value-${i}" class="num-input" type="text" inputmode="decimal" value="${row.value}" onfocus="this.select()" oninput="updateOther(${i},'value',sanitizeNum(this.value))">
         ${convertNote}
@@ -619,24 +854,61 @@ function renderDebt(){
   const body = document.getElementById("debtBody");
   body.innerHTML = "";
   let total = 0;
-  let totalInterest = 0;
   state.debt.forEach((row, i) => {
+    if(row.archived) return;
     const balance = Number(row.value)||0;
     const apr = Number(row.apr)||0;
     const yearlyInterest = balance * (apr/100);
     total += balance;
-    totalInterest += yearlyInterest;
+    const canArchive = balance <= 0;
     const tr = document.createElement("tr");
+    tr.draggable = true;
+    tr.ondragstart = (e)=>dragStart(e,'debt',i);
+    tr.ondragover = dragOver;
+    tr.ondragleave = dragLeave;
+    tr.ondrop = (e)=>dropRow(e,'debt',i);
+    tr.ondragend = dragEndCleanup;
     tr.innerHTML = `
-      <td><input id="debt-desc-${i}" value="${row.desc||""}" placeholder="e.g. Credit card" oninput="updateDebt(${i},'desc',this.value)"></td>
+      <td class="drag-handle">⋮⋮</td>
+      <td>
+        <input id="debt-desc-${i}" value="${row.desc||""}" placeholder="e.g. Credit card" oninput="updateDebt(${i},'desc',this.value)">
+        <input value="${row.notes||""}" placeholder="Add note…" style="font-size:11px;color:var(--muted);margin-top:2px;" oninput="updateDebt(${i},'notes',this.value)">
+      </td>
       <td class="num"><input id="debt-value-${i}" class="num-input" type="text" inputmode="decimal" value="${row.value}" onfocus="this.select()" oninput="updateDebt(${i},'value',sanitizeNum(this.value))"></td>
       <td class="num"><input id="debt-apr-${i}" class="num-input" type="text" inputmode="decimal" value="${row.apr}" onfocus="this.select()" oninput="updateDebt(${i},'apr',sanitizeNum(this.value))"></td>
       <td class="num" style="color:var(--muted);">${fmt(yearlyInterest)}</td>
-      <td><button class="del-btn" onclick="delRow('debt',${i})">✕</button></td>`;
+      <td style="white-space:nowrap;">
+        ${canArchive ? `<button class="small-btn" style="margin-right:4px;" onclick="archiveDebt(${i})">Paid off</button>` : ""}
+        <button class="del-btn" onclick="delRow('debt',${i})">✕</button>
+      </td>`;
     body.appendChild(tr);
   });
   document.getElementById("debtTotal").textContent = "-" + fmt(total);
+  renderArchivedDebts();
   return total;
+}
+
+let archiveListOpen = false;
+function toggleArchiveList(){ archiveListOpen = !archiveListOpen; renderArchivedDebts(); }
+function archiveDebt(i){ state.debt[i].archived = true; renderAll(); }
+function restoreDebt(i){ state.debt[i].archived = false; renderAll(); }
+function renderArchivedDebts(){
+  const wrap = document.getElementById("archivedDebtWrap");
+  if(!wrap) return;
+  const archived = state.debt.map((r,i)=>({...r, _i:i})).filter(r=>r.archived);
+  if(!archived.length){ wrap.innerHTML = ""; return; }
+  wrap.innerHTML = `
+    <div class="archive-toggle" onclick="toggleArchiveList()">Paid off (${archived.length}) <span>${archiveListOpen?"▴":"▾"}</span></div>
+    <div class="archive-list" style="display:${archiveListOpen?"block":"none"};">
+      ${archived.map(r => `
+        <div class="archive-row">
+          <span>${r.desc||"(unnamed)"}</span>
+          <span>
+            <button onclick="restoreDebt(${r._i})">Restore</button>
+            <button onclick="delRow('debt',${r._i})">Delete</button>
+          </span>
+        </div>`).join("")}
+    </div>`;
 }
 
 function renderAll(){
@@ -649,7 +921,15 @@ function renderAll(){
   const net = bank + invest - debt;
   document.getElementById("investSub").textContent = fmt(invest);
   document.getElementById("debtSub").textContent = "-" + fmt(debt);
-  document.getElementById("netWorthTotal").textContent = fmt(net);
+  const netEl = document.getElementById("netWorthTotal");
+  netEl.textContent = fmt(net);
+  if(lastNetWorth !== null && Math.abs(net - lastNetWorth) > 0.001){
+    netEl.classList.remove("flash");
+    void netEl.offsetWidth;
+    netEl.classList.add("flash");
+  }
+  lastNetWorth = net;
+  lastComputed = {net, bank, invest, debt};
   renderAllocation(bank, crypto, stocks, other, debt);
   const history = recordHistorySnapshot(net, bank, invest, debt);
   renderHistory(history);
@@ -661,12 +941,19 @@ function updateCrypto(i,k,v){ state.crypto[i][k]=v; withFocusPreserved(renderAll
 function updateStock(i,k,v){ state.stocks[i][k]=v; withFocusPreserved(renderAll); }
 function updateOther(i,k,v){ state.other[i][k]=v; withFocusPreserved(renderAll); }
 function updateDebt(i,k,v){ state.debt[i][k]=v; withFocusPreserved(renderAll); }
-function delRow(table,i){ state[table].splice(i,1); renderAll(); }
-function addBankRow(){ state.banking.push({account:"",inst:"",balance:0,currency:"GBP"}); renderAll(); }
-function addCryptoRow(){ state.crypto.push({symbol:"",qty:0}); renderAll(); }
-function addStockRow(){ state.stocks.push({ticker:"",qty:0}); renderAll(); }
-function addOtherRow(){ state.other.push({desc:"",value:0,currency:"GBP"}); renderAll(); }
-function addDebtRow(){ state.debt.push({desc:"",value:0,apr:0}); renderAll(); }
+function updateGoal(k,v){ state.goal[k]=v; save(); renderHistory(JSON.parse(localStorage.getItem("ledgerHistory")||"[]")); }
+function delRow(table,i){
+  const row = state[table][i];
+  state[table].splice(i,1);
+  lastDeleted = { table, index:i, row: JSON.parse(JSON.stringify(row)) };
+  renderAll();
+  showToast(`Removed from ${TABLE_LABELS[table]||table}.`, true);
+}
+function addBankRow(){ state.banking.push({account:"",inst:"",balance:0,currency:"GBP",notes:""}); renderAll(); }
+function addCryptoRow(){ state.crypto.push({symbol:"",qty:0,notes:""}); renderAll(); }
+function addStockRow(){ state.stocks.push({ticker:"",qty:0,notes:""}); renderAll(); }
+function addOtherRow(){ state.other.push({desc:"",value:0,currency:"GBP",notes:""}); renderAll(); }
+function addDebtRow(){ state.debt.push({desc:"",value:0,apr:0,notes:"",archived:false}); renderAll(); }
 
 async function fetchFxRate(){
   try{
@@ -808,9 +1095,16 @@ async function importBackup(event){
     if(!Array.isArray(state.debt)) state.debt = [];
     if(!Array.isArray(state.banking)) state.banking = [];
     if(!Array.isArray(state.other)) state.other = [];
-    state.banking.forEach(r => { if(r.currency === undefined) r.currency = "GBP"; });
-    state.other.forEach(r => { if(r.currency === undefined) r.currency = "GBP"; });
-    state.debt.forEach(r => { if(r.apr === undefined) r.apr = 0; });
+    if(!Array.isArray(state.crypto)) state.crypto = [];
+    if(!Array.isArray(state.stocks)) state.stocks = [];
+    if(!state.goal) state.goal = {amount:0, date:""};
+    state.banking.forEach(r => { if(r.currency === undefined) r.currency = "GBP"; if(r.notes === undefined) r.notes = ""; });
+    state.other.forEach(r => { if(r.currency === undefined) r.currency = "GBP"; if(r.notes === undefined) r.notes = ""; });
+    state.debt.forEach(r => { if(r.apr === undefined) r.apr = 0; if(r.notes === undefined) r.notes = ""; if(r.archived === undefined) r.archived = false; });
+    state.crypto.forEach(r => { if(r.notes === undefined) r.notes = ""; });
+    state.stocks.forEach(r => { if(r.notes === undefined) r.notes = ""; });
+    document.getElementById("goalAmount").value = state.goal.amount || "";
+    document.getElementById("goalDate").value = state.goal.date || "";
     renderAll();
     fetchAllPrices();
     statusEl.textContent = "Backup restored successfully.";
@@ -879,7 +1173,9 @@ function renderHistory(history){
     return;
   }
   const w = 680, h = 180, pad = 30;
+  const goal = state.goal && Number(state.goal.amount) > 0 ? Number(state.goal.amount) : null;
   const values = history.map(hh => hh.net);
+  if(goal) values.push(goal);
   const minV = Math.min(...values, 0);
   const maxV = Math.max(...values, 1);
   const range = maxV - minV || 1;
@@ -889,19 +1185,47 @@ function renderHistory(history){
     const y = (h - pad) - ((entry.net - minV)/range) * (h - pad*2);
     return `${x},${y}`;
   }).join(" ");
+  let markers = "";
+  history.forEach((entry,i) => {
+    if(entry.manual){
+      const x = pad + i*stepX;
+      const y = (h - pad) - ((entry.net - minV)/range) * (h - pad*2);
+      markers += `<circle cx="${x}" cy="${y}" r="3.5" fill="var(--amber)" stroke="var(--bg)" stroke-width="1"><title>${entry.date}: ${fmt(entry.net)}</title></circle>`;
+    }
+  });
+  let goalLine = "";
+  if(goal){
+    const gy = (h - pad) - ((goal - minV)/range) * (h - pad*2);
+    const goalLabel = `Goal: ${fmt(goal)}${state.goal.date ? " by "+state.goal.date : ""}`;
+    goalLine = `<line x1="${pad}" y1="${gy}" x2="${w-pad}" y2="${gy}" stroke="var(--purple)" stroke-width="1.5" stroke-dasharray="4 4"/>
+      <text x="${w-pad}" y="${gy-6}" text-anchor="end" class="goal-line-label">${goalLabel}</text>`;
+  }
   const first = history[0].net, last = history[history.length-1].net;
   const change = last - first;
   const changeColor = change >= 0 ? "var(--green)" : "var(--red)";
   const changeSign = change >= 0 ? "+" : "";
   el.innerHTML = `
     <svg width="100%" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">
+      ${goalLine}
       <polyline points="${pts}" fill="none" stroke="var(--amber)" stroke-width="2"/>
+      ${markers}
     </svg>
     <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:4px;">
       <span>${history[0].date}</span>
       <span style="color:${changeColor};">${changeSign}${fmt(Math.abs(change))} since first record</span>
       <span>${history[history.length-1].date}</span>
     </div>`;
+}
+
+function recordManualSnapshot(){
+  const now = new Date();
+  const label = now.toISOString().slice(0,16).replace("T"," ");
+  let history = JSON.parse(localStorage.getItem("ledgerHistory") || "[]");
+  history.push({date: label, net: lastComputed.net, bank: lastComputed.bank, invest: lastComputed.invest, debt: lastComputed.debt, manual: true});
+  history = history.slice(-180);
+  localStorage.setItem("ledgerHistory", JSON.stringify(history));
+  renderHistory(history);
+  showToast("Snapshot recorded.", false);
 }
 
 // ---------- CSV EXPORT ----------
@@ -922,7 +1246,7 @@ function exportCsv(){
     rows.push(["Stocks", r.ticker||"", `qty ${r.qty}`, ((Number(r.qty)||0)*priceGbp).toFixed(2)]);
   });
   state.other.forEach(r => rows.push(["Other", r.desc||"", "", (r.currency==="USD" ? (Number(r.value)||0)*(usdToGbp||0) : Number(r.value)||0).toFixed(2)]));
-  state.debt.forEach(r => rows.push(["Debt", r.desc||"", `APR ${r.apr||0}%`, "-" + (Number(r.value)||0).toFixed(2)]));
+  state.debt.forEach(r => rows.push(["Debt", r.desc||"", `APR ${r.apr||0}%${r.archived?" (paid off)":""}`, "-" + (r.archived ? "0.00" : (Number(r.value)||0).toFixed(2))]));
   const csv = rows.map(row => row.map(csvEscape).join(",")).join("\n");
   const blob = new Blob([csv], {type:"text/csv"});
   const url = URL.createObjectURL(blob);
@@ -988,16 +1312,25 @@ async function setPinLock(){
 function updatePinStatus(){
   const el = document.getElementById("pinStatus");
   const btn = document.getElementById("pinBtn");
+  const timeoutRow = document.getElementById("lockTimeoutRow");
   if(!el || !btn) return;
   const enabled = !!localStorage.getItem("ledgerPinHash");
   el.textContent = enabled ? "PIN lock is on." : "No PIN set — the dashboard opens straight away.";
   btn.textContent = enabled ? "Change / remove PIN" : "Set a PIN";
+  if(timeoutRow) timeoutRow.style.display = enabled ? "flex" : "none";
+  const select = document.getElementById("lockTimeoutSelect");
+  if(select) select.value = localStorage.getItem("ledgerLockTimeout") || "0";
+}
+function saveLockTimeout(v){
+  localStorage.setItem("ledgerLockTimeout", v);
+  markActivity();
 }
 async function attemptUnlock(){
   const input = document.getElementById("lockPinInput");
   const errorEl = document.getElementById("lockError");
   if(await verifyPin(input.value)){
     document.getElementById("lockOverlay").style.display = "none";
+    markActivity();
   } else {
     errorEl.textContent = "Incorrect PIN.";
     input.value = "";
@@ -1011,7 +1344,35 @@ function checkLockOnLoad(){
   }
 }
 
+// ---------- AUTO-RELOCK ON INACTIVITY ----------
+let lastActivity = Date.now();
+function markActivity(){ lastActivity = Date.now(); }
+document.addEventListener("mousemove", markActivity);
+document.addEventListener("keydown", markActivity);
+document.addEventListener("click", markActivity);
+function checkAutoRelock(){
+  const timeoutMin = Number(localStorage.getItem("ledgerLockTimeout") || "0");
+  if(timeoutMin > 0 && localStorage.getItem("ledgerPinHash")){
+    const overlay = document.getElementById("lockOverlay");
+    if(overlay.style.display !== "flex" && (Date.now() - lastActivity) >= timeoutMin*60000){
+      overlay.style.display = "flex";
+      document.getElementById("lockPinInput").focus();
+    }
+  }
+}
+
+// ---------- CLEAR ALL DATA ----------
+function clearAllData(){
+  const confirmText = prompt("This will permanently erase all data stored in this browser for this dashboard — balances, API key, PIN, and history. Type DELETE to confirm:");
+  if(confirmText !== "DELETE") return;
+  dataCleared = true;
+  ["ledgerState","finnhubKey","ledgerCollapsed","ledgerHistory","ledgerLastBackup","ledgerPinHash","ledgerPinSalt","ledgerLockTimeout"].forEach(k=>localStorage.removeItem(k));
+  location.reload();
+}
+
 document.getElementById("finnhubKey").value = finnhubKey;
+document.getElementById("goalAmount").value = (state.goal && state.goal.amount) ? state.goal.amount : "";
+document.getElementById("goalDate").value = (state.goal && state.goal.date) ? state.goal.date : "";
 applyAllPanelStates();
 updateKeyStatus();
 updatePinStatus();
@@ -1021,6 +1382,7 @@ renderAll();
 fetchAllPrices();
 setInterval(fetchAllPrices, 60000);
 setInterval(tickClock, 1000);
+setInterval(checkAutoRelock, 15000);
 tickClock();
 </script>
 </body>
