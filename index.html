@@ -290,7 +290,8 @@
     background:var(--panel);border:1px solid var(--line);padding:24px;text-align:center;max-width:360px;width:100%;
   }
   .qr-box h3{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin:0 0 16px;font-weight:600;}
-  .qr-canvas-wrap{background:#fff;padding:12px;display:inline-block;}
+  .qr-canvas-wrap{background:#fff;padding:12px;display:inline-block;max-width:100%;}
+  #qrExportCanvas{max-width:100%;height:auto;image-rendering:pixelated;}
   #qrScanVideo{width:280px;height:280px;object-fit:cover;background:#000;}
   .qr-progress{font-family:var(--mono);font-size:12px;color:var(--muted);margin-top:14px;}
   .qr-dots{display:flex;gap:5px;justify-content:center;margin-top:10px;flex-wrap:wrap;max-width:280px;}
@@ -1238,7 +1239,7 @@ async function importBackup(event){
 }
 
 // ---------- QR TRANSFER (chunked, encrypted) ----------
-const QR_CHUNK_SIZE = 1100; // conservative size per frame at ECC level M for reliable phone-camera scanning
+const QR_CHUNK_SIZE = 450; // smaller chunks = larger, more camera-friendly modules per frame (more frames, but each one scans reliably)
 let qrExportFrames = [];
 let qrExportFrameIdx = 0;
 
@@ -1284,14 +1285,21 @@ function renderQrExportFrame(){
   qr.addData(text);
   qr.make();
   const count = qr.getModuleCount();
-  const cellSize = Math.max(2, Math.floor(280/count));
-  canvas.width = count*cellSize;
-  canvas.height = count*cellSize;
+  const dpr = window.devicePixelRatio || 1;
+  const targetCssSize = 260; // desired on-screen size in CSS pixels
+  const moduleCssPx = Math.max(3, Math.floor(targetCssSize / count)); // never let a module render thinner than 3 CSS px, or phone cameras struggle
+  const moduleDevicePx = Math.round(moduleCssPx * dpr); // render at full device pixel density so retina/high-DPI screens don't blur it on upscale
+  const bufferSize = count * moduleDevicePx;
+  canvas.width = bufferSize;
+  canvas.height = bufferSize;
+  canvas.style.width = (bufferSize/dpr) + "px";
+  canvas.style.height = (bufferSize/dpr) + "px";
   const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
   ctx.fillStyle = "#fff"; ctx.fillRect(0,0,canvas.width,canvas.height);
   ctx.fillStyle = "#000";
   for(let r=0;r<count;r++) for(let c=0;c<count;c++){
-    if(qr.isDark(r,c)) ctx.fillRect(c*cellSize, r*cellSize, cellSize, cellSize);
+    if(qr.isDark(r,c)) ctx.fillRect(c*moduleDevicePx, r*moduleDevicePx, moduleDevicePx, moduleDevicePx);
   }
   const total = qrExportFrames.length;
   const nav = document.getElementById("qrExportNav");
