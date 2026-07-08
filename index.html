@@ -232,6 +232,7 @@
     background:transparent;color:var(--text);border:1px solid var(--line);
     padding:6px 12px;font-size:11px;cursor:pointer;
   }
+  .small-btn:disabled{opacity:0.35;cursor:not-allowed;}
   .danger-btn{
     background:transparent;color:var(--red);border:1px solid #3A1F22;
     padding:6px 12px;font-size:11px;cursor:pointer;
@@ -532,6 +533,10 @@
     <div class="qr-canvas-wrap"><canvas id="qrExportCanvas"></canvas></div>
     <div class="qr-progress" id="qrExportProgress"></div>
     <div class="qr-dots" id="qrExportDots"></div>
+    <div class="qr-actions" id="qrExportNav" style="display:none;">
+      <button onclick="qrExportPrev()" id="qrExportPrevBtn" class="small-btn">← Prev</button>
+      <button onclick="qrExportNext()" id="qrExportNextBtn" class="small-btn">Next →</button>
+    </div>
     <div class="qr-actions">
       <button onclick="closeQrExport()" class="small-btn">Done</button>
     </div>
@@ -1234,8 +1239,6 @@ async function importBackup(event){
 
 // ---------- QR TRANSFER (chunked, encrypted) ----------
 const QR_CHUNK_SIZE = 1100; // conservative size per frame at ECC level M for reliable phone-camera scanning
-const QR_FRAME_INTERVAL_MS = 900;
-let qrExportTimer = null;
 let qrExportFrames = [];
 let qrExportFrameIdx = 0;
 
@@ -1261,18 +1264,17 @@ async function startQrExport(){
     qrExportFrames = buildQrFrames(payload);
     qrExportFrameIdx = 0;
     document.getElementById("qrExportModal").classList.add("show");
-    renderQrExportDots();
     renderQrExportFrame();
-    clearInterval(qrExportTimer);
-    if(qrExportFrames.length > 1){
-      qrExportTimer = setInterval(() => {
-        qrExportFrameIdx = (qrExportFrameIdx + 1) % qrExportFrames.length;
-        renderQrExportFrame();
-      }, QR_FRAME_INTERVAL_MS);
-    }
   }catch(e){
     alert("Failed to prepare QR transfer: " + e.message);
   }
+}
+
+function qrExportPrev(){
+  if(qrExportFrameIdx > 0){ qrExportFrameIdx--; renderQrExportFrame(); }
+}
+function qrExportNext(){
+  if(qrExportFrameIdx < qrExportFrames.length - 1){ qrExportFrameIdx++; renderQrExportFrame(); }
 }
 
 function renderQrExportFrame(){
@@ -1282,7 +1284,7 @@ function renderQrExportFrame(){
   qr.addData(text);
   qr.make();
   const count = qr.getModuleCount();
-  const cellSize = Math.max(2, Math.floor(260/count));
+  const cellSize = Math.max(2, Math.floor(280/count));
   canvas.width = count*cellSize;
   canvas.height = count*cellSize;
   const ctx = canvas.getContext("2d");
@@ -1292,9 +1294,16 @@ function renderQrExportFrame(){
     if(qr.isDark(r,c)) ctx.fillRect(c*cellSize, r*cellSize, cellSize, cellSize);
   }
   const total = qrExportFrames.length;
-  document.getElementById("qrExportProgress").textContent = total > 1
-    ? `Frame ${qrExportFrameIdx+1} of ${total} — cycling automatically until you close this`
-    : `Single frame — scan any time`;
+  const nav = document.getElementById("qrExportNav");
+  if(total > 1){
+    document.getElementById("qrExportProgress").textContent = `Frame ${qrExportFrameIdx+1} of ${total} — hold steady, then tap Next once it's scanned`;
+    nav.style.display = "flex";
+    document.getElementById("qrExportPrevBtn").disabled = qrExportFrameIdx === 0;
+    document.getElementById("qrExportNextBtn").disabled = qrExportFrameIdx === total - 1;
+  } else {
+    document.getElementById("qrExportProgress").textContent = "Single frame — no rush, scan any time";
+    nav.style.display = "none";
+  }
   renderQrExportDots();
 }
 function renderQrExportDots(){
@@ -1302,7 +1311,6 @@ function renderQrExportDots(){
   wrap.innerHTML = qrExportFrames.map((_,i) => `<div class="qr-dot ${i===qrExportFrameIdx?"current":""}"></div>`).join("");
 }
 function closeQrExport(){
-  clearInterval(qrExportTimer);
   document.getElementById("qrExportModal").classList.remove("show");
 }
 
@@ -1315,18 +1323,28 @@ let qrScanActiveId = null;
 
 async function startQrScan(){
   document.getElementById("qrScanModal").classList.add("show");
-  document.getElementById("qrScanProgress").textContent = "Waiting for first frame…";
+  document.getElementById("qrScanProgress").textContent = "Requesting camera…";
   document.getElementById("qrScanDots").innerHTML = "";
   qrScanChunks = {}; qrScanTotal = {}; qrScanActiveId = null;
   const video = document.getElementById("qrScanVideo");
+
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    document.getElementById("qrScanProgress").innerHTML =
+      "This browser won't allow camera access here.<br>If you opened this link inside an app (e.g. from Messages, Instagram, or another in-app browser), try opening it in Safari/Chrome directly instead.";
+    return;
+  }
   try{
-    qrScanStream = await navigator.mediaDevices.getUserMedia({video: {facingMode: "environment"}});
+    qrScanStream = await navigator.mediaDevices.getUserMedia({video: {facingMode: {ideal:"environment"}}});
     video.srcObject = qrScanStream;
     await video.play();
+    document.getElementById("qrScanProgress").textContent = "Waiting for first frame…";
     qrScanLoop();
   }catch(e){
-    alert("Camera access failed: " + e.message);
-    closeQrScan();
+    let msg = "Camera access failed: " + e.message;
+    if(e.name === "NotAllowedError") msg = "Camera permission was denied. Check your browser's site settings and allow camera access for this page, then try again.";
+    else if(e.name === "NotFoundError") msg = "No camera was found on this device.";
+    else if(e.name === "NotReadableError") msg = "The camera is already in use by another app.";
+    document.getElementById("qrScanProgress").textContent = msg;
   }
 }
 
