@@ -118,7 +118,13 @@
     font-size:11px;
     color:var(--muted);
   }
-  table{width:100%;border-collapse:collapse;}
+  table{width:100%;border-collapse:collapse;min-width:480px;}
+  .table-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  @media (max-width: 600px){
+    body{padding:16px 12px 60px;}
+    .hero .value{font-size:38px;}
+    .qr-box{padding:16px;}
+  }
   th{
     text-align:left;
     font-size:10px;
@@ -350,6 +356,7 @@
           <button onclick="toggleKeyVisibility()" id="toggleKeyBtn" class="small-btn">Show</button>
         </div>
         <div id="keyStatus" style="font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:8px;"></div>
+        <div id="keySecurityNote" style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5;"></div>
       </div>
       <div class="settings-row">
         <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px;">PIN lock (deters casual glances — not real security)</div>
@@ -389,12 +396,12 @@
       <div class="sub" id="bankingTotal">£0.00</div>
     </div>
     <div class="panel-body" id="body-banking">
-      <table>
+      <div class="table-scroll"><table>
         <thead>
           <tr><th></th><th>Account</th><th>Institution</th><th class="num">Balance</th><th style="text-align:center;">USD</th><th></th></tr>
         </thead>
         <tbody id="bankingBody"></tbody>
-      </table>
+      </table></div>
       <button class="add-row" onclick="addBankRow()">+ add account</button>
     </div>
   </div>
@@ -406,12 +413,12 @@
       <div class="sub" id="cryptoTotal">£0.00</div>
     </div>
     <div class="panel-body" id="body-crypto">
-      <table>
+      <div class="table-scroll"><table>
         <thead>
           <tr><th></th><th>Asset</th><th class="num">Quantity</th><th class="num">Price (£)</th><th class="num">Value (£)</th><th></th></tr>
         </thead>
         <tbody id="cryptoBody"></tbody>
-      </table>
+      </table></div>
       <button class="add-row" onclick="addCryptoRow()">+ add coin</button>
     </div>
   </div>
@@ -423,12 +430,12 @@
       <div class="sub" id="stocksTotal">£0.00</div>
     </div>
     <div class="panel-body" id="body-stocks">
-      <table>
+      <div class="table-scroll"><table>
         <thead>
           <tr><th></th><th>Ticker (US-listed)</th><th class="num">Quantity</th><th class="num">Price (£)</th><th class="num">Value (£)</th><th></th></tr>
         </thead>
         <tbody id="stocksBody"></tbody>
-      </table>
+      </table></div>
       <button class="add-row" onclick="addStockRow()">+ add holding</button>
     </div>
   </div>
@@ -440,12 +447,12 @@
       <div class="sub" id="otherTotal">£0.00</div>
     </div>
     <div class="panel-body" id="body-other">
-      <table>
+      <div class="table-scroll"><table>
         <thead>
           <tr><th></th><th>Description</th><th class="num">Value</th><th style="text-align:center;">USD</th><th></th></tr>
         </thead>
         <tbody id="otherBody"></tbody>
-      </table>
+      </table></div>
       <button class="add-row" onclick="addOtherRow()">+ add item</button>
     </div>
   </div>
@@ -457,12 +464,12 @@
       <div class="sub" id="debtTotal" style="color:var(--red);">£0.00</div>
     </div>
     <div class="panel-body" id="body-debt">
-      <table>
+      <div class="table-scroll"><table>
         <thead>
           <tr><th></th><th>Description</th><th class="num">Balance owed (£)</th><th class="num">APR %</th><th class="num">Est. yearly interest</th><th></th></tr>
         </thead>
         <tbody id="debtBody"></tbody>
-      </table>
+      </table></div>
       <button class="add-row" onclick="addDebtRow()" style="color:var(--red);">+ add debt</button>
       <div id="archivedDebtWrap"></div>
     </div>
@@ -732,6 +739,20 @@ function withFocusPreserved(fn){
   }
 }
 
+// Typing into a field updates the field's own display instantly (native browser behaviour,
+// no JS needed for that part) — what's expensive is re-rendering every other panel/total/chart
+// on every keystroke. Debouncing that part keeps typing smooth without any visible lag on the
+// input itself, since only the DERIVED numbers (totals, allocation, history) settle 300ms after
+// you stop typing rather than on every single character.
+function debounce(fn, delay){
+  let timer = null;
+  return function(...args){
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), delay);
+  };
+}
+const debouncedRenderAll = debounce(() => withFocusPreserved(renderAll), 300);
+
 function renderBanking(){
   const body = document.getElementById("bankingBody");
   body.innerHTML = "";
@@ -852,7 +873,7 @@ function renderStocks(){
 
 function updateStockPrice(i, v){
   state.stocks[i].priceOverride = v === "" ? null : v;
-  withFocusPreserved(renderAll);
+  debouncedRenderAll();
 }
 
 // ---------- TICKER AUTOCOMPLETE ----------
@@ -935,6 +956,13 @@ function updateKeyStatus(){
   const el = document.getElementById("keyStatus");
   if(!el) return;
   el.textContent = finnhubKey ? "Key saved — used for live crypto & stock prices." : "No key set — prices won't load until one is added.";
+  const noteEl = document.getElementById("keySecurityNote");
+  if(noteEl){
+    const pinSet = !!localStorage.getItem("ledgerPinHash");
+    noteEl.textContent = pinSet
+      ? "This key is encrypted using your PIN and can only be read after you unlock."
+      : "This key is stored in plain text in this browser (no PIN set). Anyone with access to this device/browser could read it from local storage. Set a PIN above to encrypt it.";
+  }
 }
 
 function renderOther(){
@@ -1058,11 +1086,11 @@ function renderAll(){
   save();
 }
 
-function updateBank(i,k,v){ state.banking[i][k]=v; withFocusPreserved(renderAll); }
-function updateCrypto(i,k,v){ state.crypto[i][k]=v; withFocusPreserved(renderAll); }
-function updateStock(i,k,v){ state.stocks[i][k]=v; withFocusPreserved(renderAll); }
-function updateOther(i,k,v){ state.other[i][k]=v; withFocusPreserved(renderAll); }
-function updateDebt(i,k,v){ state.debt[i][k]=v; withFocusPreserved(renderAll); }
+function updateBank(i,k,v){ state.banking[i][k]=v; debouncedRenderAll(); }
+function updateCrypto(i,k,v){ state.crypto[i][k]=v; debouncedRenderAll(); }
+function updateStock(i,k,v){ state.stocks[i][k]=v; debouncedRenderAll(); }
+function updateOther(i,k,v){ state.other[i][k]=v; debouncedRenderAll(); }
+function updateDebt(i,k,v){ state.debt[i][k]=v; debouncedRenderAll(); }
 function updateGoal(k,v){ state.goal[k]=v; save(); renderHistory(JSON.parse(localStorage.getItem("ledgerHistory")||"[]")); }
 function delRow(table,i){
   const row = state[table][i];
@@ -1328,6 +1356,22 @@ let qrScanRafId = null;
 let qrScanChunks = {}; // id -> array of chunks (sparse, indexed by chunk i)
 let qrScanTotal = {};  // id -> n
 let qrScanActiveId = null;
+let qrDetector = null; // null = not yet checked, false = unsupported, instance = supported
+
+async function initQrDetector(){
+  if(qrDetector !== null) return qrDetector;
+  if("BarcodeDetector" in window){
+    try{
+      const formats = await BarcodeDetector.getSupportedFormats();
+      if(formats.includes("qr_code")){
+        qrDetector = new BarcodeDetector({formats:["qr_code"]});
+        return qrDetector;
+      }
+    }catch(e){}
+  }
+  qrDetector = false;
+  return false;
+}
 
 async function startQrScan(){
   document.getElementById("qrScanModal").classList.add("show");
@@ -1345,7 +1389,10 @@ async function startQrScan(){
     qrScanStream = await navigator.mediaDevices.getUserMedia({video: {facingMode: {ideal:"environment"}}});
     video.srcObject = qrScanStream;
     await video.play();
-    document.getElementById("qrScanProgress").textContent = "Waiting for first frame…";
+    const detector = await initQrDetector();
+    document.getElementById("qrScanProgress").textContent = detector
+      ? "Waiting for first frame… (using device's built-in scanner)"
+      : "Waiting for first frame…";
     qrScanLoop();
   }catch(e){
     let msg = "Camera access failed: " + e.message;
@@ -1356,17 +1403,28 @@ async function startQrScan(){
   }
 }
 
-function qrScanLoop(){
+let qrScanBusy = false;
+async function qrScanLoop(){
+  if(!document.getElementById("qrScanModal").classList.contains("show")) return;
   const video = document.getElementById("qrScanVideo");
-  const canvas = document.getElementById("qrScanCanvas");
-  if(video.readyState === video.HAVE_ENOUGH_DATA){
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const code = jsQR(imgData.data, imgData.width, imgData.height);
-    if(code && code.data) handleQrFrameText(code.data);
+  if(video.readyState === video.HAVE_ENOUGH_DATA && !qrScanBusy){
+    qrScanBusy = true;
+    try{
+      if(qrDetector){
+        const results = await qrDetector.detect(video);
+        if(results && results[0] && results[0].rawValue) handleQrFrameText(results[0].rawValue);
+      } else {
+        const canvas = document.getElementById("qrScanCanvas");
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imgData.data, imgData.width, imgData.height);
+        if(code && code.data) handleQrFrameText(code.data);
+      }
+    }catch(e){ /* a blurry/transient frame failing to decode is normal — just retry next tick */ }
+    qrScanBusy = false;
   }
   qrScanRafId = requestAnimationFrame(qrScanLoop);
 }
@@ -1620,6 +1678,74 @@ async function verifyPin(pin){
   if(!salt || !storedHash) return true;
   return (await hashPin(pin, salt)) === storedHash;
 }
+
+async function encryptFinnhubKeyWithPin(pin, keyToEncrypt){
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const derivedKey = await deriveKey(pin, salt);
+  const enc = new TextEncoder();
+  const ciphertext = await crypto.subtle.encrypt({name:"AES-GCM", iv}, derivedKey, enc.encode(keyToEncrypt));
+  localStorage.setItem("finnhubKeyEncrypted", JSON.stringify({salt: bufToBase64(salt), iv: bufToBase64(iv), data: bufToBase64(ciphertext)}));
+  localStorage.removeItem("finnhubKey");
+}
+async function decryptFinnhubKeyWithPin(pin){
+  const stored = localStorage.getItem("finnhubKeyEncrypted");
+  if(!stored) return "";
+  try{
+    const payload = JSON.parse(stored);
+    const salt = new Uint8Array(base64ToBuf(payload.salt));
+    const iv = new Uint8Array(base64ToBuf(payload.iv));
+    const derivedKey = await deriveKey(pin, salt);
+    const plaintextBuf = await crypto.subtle.decrypt({name:"AES-GCM", iv}, derivedKey, base64ToBuf(payload.data));
+    return new TextDecoder().decode(plaintextBuf);
+  }catch(e){ return ""; }
+}
+
+
+async function encryptFinnhubKeyWithPin(pin, keyToEncrypt){
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const derivedKey = await deriveKey(pin, salt);
+  const enc = new TextEncoder();
+  const ciphertext = await crypto.subtle.encrypt({name:"AES-GCM", iv}, derivedKey, enc.encode(keyToEncrypt));
+  localStorage.setItem("finnhubKeyEncrypted", JSON.stringify({salt: bufToBase64(salt), iv: bufToBase64(iv), data: bufToBase64(ciphertext)}));
+  localStorage.removeItem("finnhubKey");
+}
+async function decryptFinnhubKeyWithPin(pin){
+  const stored = localStorage.getItem("finnhubKeyEncrypted");
+  if(!stored) return "";
+  try{
+    const payload = JSON.parse(stored);
+    const salt = new Uint8Array(base64ToBuf(payload.salt));
+    const iv = new Uint8Array(base64ToBuf(payload.iv));
+    const derivedKey = await deriveKey(pin, salt);
+    const plaintextBuf = await crypto.subtle.decrypt({name:"AES-GCM", iv}, derivedKey, base64ToBuf(payload.data));
+    return new TextDecoder().decode(plaintextBuf);
+  }catch(e){ return ""; }
+}
+
+
+async function encryptFinnhubKeyWithPin(pin, keyToEncrypt){
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const derivedKey = await deriveKey(pin, salt);
+  const enc = new TextEncoder();
+  const ciphertext = await crypto.subtle.encrypt({name:"AES-GCM", iv}, derivedKey, enc.encode(keyToEncrypt));
+  localStorage.setItem("finnhubKeyEncrypted", JSON.stringify({salt: bufToBase64(salt), iv: bufToBase64(iv), data: bufToBase64(ciphertext)}));
+  localStorage.removeItem("finnhubKey");
+}
+async function decryptFinnhubKeyWithPin(pin){
+  const stored = localStorage.getItem("finnhubKeyEncrypted");
+  if(!stored) return "";
+  try{
+    const payload = JSON.parse(stored);
+    const salt = new Uint8Array(base64ToBuf(payload.salt));
+    const iv = new Uint8Array(base64ToBuf(payload.iv));
+    const derivedKey = await deriveKey(pin, salt);
+    const plaintextBuf = await crypto.subtle.decrypt({name:"AES-GCM", iv}, derivedKey, base64ToBuf(payload.data));
+    return new TextDecoder().decode(plaintextBuf);
+  }catch(e){ return ""; }
+}
 async function setPinLock(){
   if(localStorage.getItem("ledgerPinHash")){
     const current = prompt("Enter your current PIN to change or remove it:");
@@ -1631,7 +1757,11 @@ async function setPinLock(){
   if(newPin === ""){
     localStorage.removeItem("ledgerPinHash");
     localStorage.removeItem("ledgerPinSalt");
+    // no PIN left to encrypt the key with, so fall back to plain storage (in-memory key is already available this session)
+    if(finnhubKey) localStorage.setItem("finnhubKey", finnhubKey);
+    localStorage.removeItem("finnhubKeyEncrypted");
     updatePinStatus();
+    updateKeyStatus();
     return;
   }
   const confirmPin = prompt("Confirm new PIN:");
@@ -1639,7 +1769,9 @@ async function setPinLock(){
   const salt = bufToBase64(crypto.getRandomValues(new Uint8Array(16)));
   localStorage.setItem("ledgerPinSalt", salt);
   localStorage.setItem("ledgerPinHash", await hashPin(newPin, salt));
+  if(finnhubKey) await encryptFinnhubKeyWithPin(newPin, finnhubKey); // re-encrypts under the new PIN even if one was already set
   updatePinStatus();
+  updateKeyStatus();
 }
 function updatePinStatus(){
   const el = document.getElementById("pinStatus");
@@ -1660,9 +1792,22 @@ function saveLockTimeout(v){
 async function attemptUnlock(){
   const input = document.getElementById("lockPinInput");
   const errorEl = document.getElementById("lockError");
-  if(await verifyPin(input.value)){
+  const pin = input.value;
+  if(await verifyPin(pin)){
     document.getElementById("lockOverlay").style.display = "none";
     markActivity();
+    // decrypt the API key now that we're unlocked, migrating an old plaintext key if this
+    // PIN was set before key-encryption existed
+    if(localStorage.getItem("finnhubKeyEncrypted")){
+      finnhubKey = await decryptFinnhubKeyWithPin(pin);
+    } else if(localStorage.getItem("finnhubKey")){
+      finnhubKey = localStorage.getItem("finnhubKey");
+      await encryptFinnhubKeyWithPin(pin, finnhubKey);
+    }
+    const keyInput = document.getElementById("finnhubKey");
+    if(keyInput) keyInput.value = finnhubKey;
+    updateKeyStatus();
+    fetchAllPrices();
   } else {
     errorEl.textContent = "Incorrect PIN.";
     input.value = "";
@@ -1684,6 +1829,7 @@ function manualLock(){
     }
     return;
   }
+  sessionPin = null; // clear the in-memory PIN so it isn't sitting around while "locked"
   document.getElementById("lockOverlay").style.display = "flex";
   document.getElementById("lockPinInput").focus();
 }
@@ -1699,6 +1845,7 @@ function checkAutoRelock(){
   if(timeoutMin > 0 && localStorage.getItem("ledgerPinHash")){
     const overlay = document.getElementById("lockOverlay");
     if(overlay.style.display !== "flex" && (Date.now() - lastActivity) >= timeoutMin*60000){
+      sessionPin = null;
       overlay.style.display = "flex";
       document.getElementById("lockPinInput").focus();
     }
